@@ -1,0 +1,123 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #080b10;
+  color: #f4f7fb;
+}
+
+.app {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 80% 10%, rgba(0, 180, 255, 0.08), transparent 30%),
+    radial-gradient(circle at 20% 80%, rgba(120, 70, 255, 0.08), transparent 30%),
+    #080b10;
+}
+
+.topbar {
+  height: 78px;
+  padding: 0 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #202833;
+  background: rgba(10, 14, 20, 0.92);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.brand-mark {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #344252;
+  border-radius: 10px;
+  color: #36d9ff;
+  font-size: 21px;
+  background: #111822;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 19px;
+  letter-spacing: 3px;
+}
+
+.brand p {
+  margin: 4px 0 0;
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: #7d8a99;
+}
+
+.system-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 14px;
+  border: 1px solid #27333f;
+  border-radius: 8px;
+  color: #b7c3ce;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #32e38a;
+  box-shadow: 0 0 10px rgba(50, 227, 138, 0.8);
+}
+
+.dashboard {
+  padding: 42px;
+}
+
+.welcome-panel {
+  max-width: 900px;
+  padding: 42px;
+  border: 1px solid #26313d;
+  border-radius: 14px;
+  background: rgba(15, 21, 29, 0.82);
+}
+
+.eyebrow {
+  margin: 0 0 14px;
+  color: #36d9ff;
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+
+.welcome-panel h2 {
+  margin: 0;
+  font-size: 42px;
+  font-weight: 600;
+}
+
+.welcome-panel > p:not(.eyebrow) {
+  color: #8e9baa;
+  font-size: 15px;
+  margin-top: 12px;
+}
+
+.ready-message {
+  margin-top: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid #263b33;
+  border-radius: 8px;
+  color: #b8d8c8;
+  background: rgba(35, 120, 75, 0.08);
+  font-size: 12px;
+}
