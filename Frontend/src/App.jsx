@@ -25,7 +25,6 @@ function App() {
             </div>
           </div>
 
-
           {/* NAVIGATION */}
           <nav className="navigation">
 
@@ -67,7 +66,6 @@ function App() {
 
           </nav>
 
-
           {/* SYSTEM STATUS */}
           <div className="system-status">
             <span className="status-dot"></span>
@@ -75,7 +73,6 @@ function App() {
           </div>
 
         </header>
-
 
         {/* PAGE ROUTES */}
         <Routes>
