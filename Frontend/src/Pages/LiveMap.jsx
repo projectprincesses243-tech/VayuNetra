@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 
 import {
   MapContainer,
@@ -19,6 +19,10 @@ import {
   survivors,
   disaster
 } from "../data/demoData";
+
+import {
+  getActiveOperation
+} from "../data/operationStorage";
 
 
 // ==========================================
@@ -44,7 +48,6 @@ L.Icon.Default.mergeOptions({
 // ==========================================
 
 const droneIcon = L.divIcon({
-
   className: "drone-marker",
 
   html: `
@@ -66,7 +69,6 @@ const droneIcon = L.divIcon({
   `,
 
   iconSize: [34, 34],
-
   iconAnchor: [17, 17]
 });
 
@@ -76,7 +78,6 @@ const droneIcon = L.divIcon({
 // ==========================================
 
 const disasterIcon = L.divIcon({
-
   className: "disaster-marker",
 
   html: `
@@ -98,7 +99,6 @@ const disasterIcon = L.divIcon({
   `,
 
   iconSize: [38, 38],
-
   iconAnchor: [19, 19]
 });
 
@@ -108,7 +108,6 @@ const disasterIcon = L.divIcon({
 // ==========================================
 
 const survivorIcon = L.divIcon({
-
   className: "survivor-marker",
 
   html: `
@@ -130,20 +129,72 @@ const survivorIcon = L.divIcon({
   `,
 
   iconSize: [30, 30],
-
   iconAnchor: [15, 15]
 });
 
 
 // ==========================================
-// MAP FOCUS COMPONENT
+// MAP RESIZE HANDLER
+// ==========================================
+
+function MapResizeHandler({ fullscreen }) {
+
+  const map = useMap();
+
+  useEffect(() => {
+
+    const resizeMap = () => {
+      map.invalidateSize();
+    };
+
+    resizeMap();
+
+    const timer1 = setTimeout(
+      resizeMap,
+      100
+    );
+
+    const timer2 = setTimeout(
+      resizeMap,
+      400
+    );
+
+    window.addEventListener(
+      "resize",
+      resizeMap
+    );
+
+    return () => {
+
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+
+      window.removeEventListener(
+        "resize",
+        resizeMap
+      );
+
+    };
+
+  }, [fullscreen, map]);
+
+  return null;
+}
+
+
+// ==========================================
+// MAP FOCUS
 // ==========================================
 
 function MapFocus({ selectedDrone }) {
 
   const map = useMap();
 
-  if (selectedDrone) {
+  useEffect(() => {
+
+    if (!selectedDrone) {
+      return;
+    }
 
     map.flyTo(
       [
@@ -156,7 +207,7 @@ function MapFocus({ selectedDrone }) {
       }
     );
 
-  }
+  }, [selectedDrone, map]);
 
   return null;
 }
@@ -168,14 +219,80 @@ function MapFocus({ selectedDrone }) {
 
 function LiveMap() {
 
+  const [activeOperation, setActiveOperation] =
+    useState(null);
+
   const [selectedDrone, setSelectedDrone] =
     useState(null);
 
   const [fullscreen, setFullscreen] =
     useState(false);
 
-  const mapSectionRef =
+  const mapFullscreenRef =
     useRef(null);
+
+
+  // ========================================
+  // LOAD ACTIVE OPERATION
+  // ========================================
+
+  useEffect(() => {
+
+    const loadOperation = () => {
+
+      const operation =
+        getActiveOperation();
+
+      setActiveOperation(operation);
+
+    };
+
+    loadOperation();
+
+    const interval =
+      setInterval(
+        loadOperation,
+        1000
+      );
+
+    return () => {
+      clearInterval(interval);
+    };
+
+  }, []);
+
+
+  // ========================================
+  // FULLSCREEN CHANGE
+  // ========================================
+
+  useEffect(() => {
+
+    const handleFullscreenChange = () => {
+
+      const isFullscreen =
+        document.fullscreenElement ===
+        mapFullscreenRef.current;
+
+      setFullscreen(isFullscreen);
+
+    };
+
+    document.addEventListener(
+      "fullscreenchange",
+      handleFullscreenChange
+    );
+
+    return () => {
+
+      document.removeEventListener(
+        "fullscreenchange",
+        handleFullscreenChange
+      );
+
+    };
+
+  }, []);
 
 
   // ========================================
@@ -186,24 +303,23 @@ function LiveMap() {
 
     try {
 
-      if (!fullscreen) {
-
-        await mapSectionRef.current?.requestFullscreen();
-
-        setFullscreen(true);
-
-      } else {
+      if (
+        document.fullscreenElement ===
+        mapFullscreenRef.current
+      ) {
 
         await document.exitFullscreen();
 
-        setFullscreen(false);
+      } else {
+
+        await mapFullscreenRef.current?.requestFullscreen();
 
       }
 
     } catch (error) {
 
-      console.log(
-        "Fullscreen not available",
+      console.error(
+        "Fullscreen error:",
         error
       );
 
@@ -211,6 +327,72 @@ function LiveMap() {
 
   };
 
+
+  // ========================================
+  // GET ALLOCATED DRONE IDS
+  // ========================================
+
+  const assignedDroneIds =
+    Array.isArray(
+      activeOperation?.assignedDrones
+    )
+      ? activeOperation.assignedDrones
+      : [];
+
+
+  // ========================================
+  // ONLY DRONES IN CURRENT OPERATION
+  // ========================================
+
+  const activeMissionDrones =
+    drones.filter(
+      (drone) =>
+        assignedDroneIds.includes(
+          drone.id
+        )
+    );
+
+
+  // ========================================
+  // CLEAR INVALID SELECTION
+  // ========================================
+
+  useEffect(() => {
+
+    if (!selectedDrone) {
+      return;
+    }
+
+    const exists =
+      activeMissionDrones.some(
+        (drone) =>
+          drone.id === selectedDrone.id
+      );
+
+    if (!exists) {
+      setSelectedDrone(null);
+    }
+
+  }, [
+    activeOperation,
+    selectedDrone,
+    activeMissionDrones
+  ]);
+
+
+  // ========================================
+  // OPERATION NAME
+  // ========================================
+
+  const operationName =
+    activeOperation?.operation ||
+    activeOperation?.name ||
+    "No Active Operation";
+
+
+  // ========================================
+  // PAGE
+  // ========================================
 
   return (
 
@@ -220,135 +402,268 @@ function LiveMap() {
           HEADER
       ================================== */}
 
-      <section className="hero-section">
+      {!fullscreen && (
 
-        <div>
-
-          <p className="eyebrow">
-            SWARM NAVIGATION
-          </p>
-
-          <h2>
-            Live <span>Map</span>
-          </h2>
-
-          <p className="hero-description">
-            Real-time operational view of the
-            VayuNetra drone swarm.
-          </p>
-
-        </div>
-
-
-        <div className="mission-status">
-
-          <span className="status-dot"></span>
-
-          LOCALISATION ONLINE
-
-        </div>
-
-      </section>
-
-
-      {/* ==================================
-          MAP + DRONE CONTROL
-      ================================== */}
-
-      <section
-        ref={mapSectionRef}
-        className="map-panel"
-        style={{
-          marginTop: "18px",
-          overflow: "hidden",
-          background: "#0d0b16"
-        }}
-      >
-
-        {/* =================================
-            TOP BAR
-        ================================= */}
-
-        <div
-          style={{
-            padding: "14px 18px",
-            display: "flex",
-            justifyContent:
-              "space-between",
-            alignItems: "center",
-            borderBottom:
-              "1px solid rgba(255,255,255,0.08)"
-          }}
-        >
+        <section className="hero-section">
 
           <div>
 
-            <p
-              style={{
-                margin: 0,
-                fontSize: "9px",
-                letterSpacing: "1px",
-                color: "#858da5"
-              }}
-            >
-              GEOSPATIAL MONITORING
+            <p className="eyebrow">
+              SWARM NAVIGATION
             </p>
 
-            <h3
-              style={{
-                margin: "4px 0 0"
-              }}
-            >
-              Mission Control Map
-            </h3>
+            <h2>
+              Live <span>Map</span>
+            </h2>
+
+            <p className="hero-description">
+              Real-time operational view of the
+              VayuNetra drone swarm.
+            </p>
 
           </div>
 
+          <div className="mission-status">
 
-          <button
-            type="button"
-            onClick={toggleFullscreen}
-            style={{
-              cursor: "pointer",
-              padding: "9px 14px"
-            }}
-          >
+            <span className="status-dot"></span>
 
-            {fullscreen
-              ? "⛶ EXIT FULLSCREEN"
-              : "⛶ FULLSCREEN"}
+            LOCALISATION ONLINE
 
-          </button>
+          </div>
 
-        </div>
+        </section>
+
+      )}
+
+
+      {/* ==================================
+          MAP PANEL
+      ================================== */}
+
+      <section
+        className={
+          fullscreen
+            ? "map-panel live-map-panel fullscreen-panel"
+            : "map-panel live-map-panel"
+        }
+
+        style={{
+          marginTop: fullscreen
+            ? 0
+            : "18px",
+
+          height: fullscreen
+            ? "100vh"
+            : "calc(100vh - 250px)",
+
+          minHeight: fullscreen
+            ? "100vh"
+            : "560px"
+        }}
+      >
 
 
         {/* =================================
-            MAIN MAP AREA
+            NORMAL HEADER
+        ================================= */}
+
+        {!fullscreen && (
+
+          <div className="panel-header">
+
+            <div>
+
+              <p>
+                GEOSPATIAL MONITORING
+              </p>
+
+              <h3>
+                Mission Control Map
+              </h3>
+
+            </div>
+
+            <span className="map-status">
+
+              {activeMissionDrones.length}
+              {" "}
+              ACTIVE DRONES
+
+            </span>
+
+          </div>
+
+        )}
+
+
+        {/* =================================
+            MAP + SIDEBAR
         ================================= */}
 
         <div
           style={{
             display: "grid",
+
             gridTemplateColumns:
-              "minmax(0, 3fr) minmax(280px, 1fr)",
-            minHeight: "600px"
+              fullscreen
+                ? "1fr"
+                : "minmax(0, 3fr) minmax(280px, 1fr)",
+
+            width: "100%",
+
+            height: fullscreen
+              ? "100%"
+              : "calc(100% - 0px)",
+
+            minHeight: 0
           }}
         >
 
-          {/* ===============================
-              MAP
-          ================================ */}
+
+          {/* =================================
+              MAP AREA
+          ================================= */}
 
           <div
+            ref={mapFullscreenRef}
+
             style={{
-              minWidth: 0,
-              height: "600px"
+              position: "relative",
+
+              width: "100%",
+
+              height: fullscreen
+                ? "100vh"
+                : "100%",
+
+              minHeight: fullscreen
+                ? "100vh"
+                : "500px",
+
+              overflow: "hidden",
+
+              background: "#0d0b16"
             }}
           >
 
-            <MapContainer
 
+            {/* =================================
+                FULLSCREEN BUTTON
+            ================================= */}
+
+            <button
+              type="button"
+
+              onClick={toggleFullscreen}
+
+              style={{
+                position: "absolute",
+
+                zIndex: 2000,
+
+                top: "12px",
+
+                right: "12px",
+
+                padding: "9px 14px",
+
+                border: "none",
+
+                borderRadius: "7px",
+
+                background: "#7c3aed",
+
+                color: "white",
+
+                fontSize: "10px",
+
+                fontWeight: 700,
+
+                cursor: "pointer",
+
+                boxShadow:
+                  "0 5px 18px rgba(0,0,0,0.35)"
+              }}
+            >
+
+              {fullscreen
+                ? "⛶ EXIT FULLSCREEN"
+                : "⛶ FULLSCREEN"}
+
+            </button>
+
+
+            {/* =================================
+                OPERATION BADGE
+            ================================= */}
+
+            <div
+              style={{
+                position: "absolute",
+
+                zIndex: 1000,
+
+                top: "12px",
+
+                left: "12px",
+
+                padding: "10px 13px",
+
+                borderRadius: "7px",
+
+                background:
+                  "rgba(13,11,22,0.92)",
+
+                border:
+                  "1px solid rgba(255,255,255,0.1)",
+
+                color: "white",
+
+                minWidth: "180px",
+
+                backdropFilter: "blur(8px)"
+              }}
+            >
+
+              <div
+                style={{
+                  fontSize: "8px",
+                  letterSpacing: "1px",
+                  color: "#858da5",
+                  marginBottom: "3px"
+                }}
+              >
+                CURRENT OPERATION
+              </div>
+
+              <strong
+                style={{
+                  display: "block",
+                  fontSize: "12px"
+                }}
+              >
+                {operationName}
+              </strong>
+
+              <small
+                style={{
+                  color: "#697386",
+                  fontSize: "9px"
+                }}
+              >
+                {activeMissionDrones.length}
+                {" "}
+                drones deployed
+              </small>
+
+            </div>
+
+
+            {/* =================================
+                MAP
+            ================================= */}
+
+            <MapContainer
               center={[
                 disaster.latitude,
                 disaster.longitude
@@ -360,21 +675,22 @@ function LiveMap() {
 
               style={{
                 width: "100%",
-                height: "100%"
+                height: "100%",
+                minHeight: "100%"
               }}
-
             >
 
               <TileLayer
-
                 attribution="&copy; OpenStreetMap contributors"
 
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-
               />
 
 
-              {/* SELECTED DRONE FOCUS */}
+              <MapResizeHandler
+                fullscreen={fullscreen}
+              />
+
 
               <MapFocus
                 selectedDrone={
@@ -383,19 +699,17 @@ function LiveMap() {
               />
 
 
-              {/* =========================
+              {/* =================================
                   DISASTER
-              ========================== */}
+              ================================= */}
 
               <Marker
-
                 position={[
                   disaster.latitude,
                   disaster.longitude
                 ]}
 
                 icon={disasterIcon}
-
               >
 
                 <Popup>
@@ -421,12 +735,11 @@ function LiveMap() {
               </Marker>
 
 
-              {/* =========================
+              {/* =================================
                   MISSION AREA
-              ========================== */}
+              ================================= */}
 
               <Circle
-
                 center={[
                   disaster.latitude,
                   disaster.longitude
@@ -436,22 +749,23 @@ function LiveMap() {
 
                 pathOptions={{
                   color: "#8b5cf6",
+                  fillColor: "#8b5cf6",
                   fillOpacity: 0.08
                 }}
-
               />
 
 
-              {/* =========================
+              {/* =================================
                   SURVIVORS
-              ========================== */}
+              ================================= */}
 
               {survivors.map(
                 (survivor) => (
 
                   <Marker
-
-                    key={survivor.id}
+                    key={
+                      survivor.id
+                    }
 
                     position={[
                       survivor.latitude,
@@ -459,7 +773,6 @@ function LiveMap() {
                     ]}
 
                     icon={survivorIcon}
-
                   >
 
                     <Popup>
@@ -486,16 +799,21 @@ function LiveMap() {
               )}
 
 
-              {/* =========================
-                  DRONES
-              ========================== */}
+              {/* =================================
+                  IMPORTANT
 
-              {drones.map(
+                  ONLY ALLOCATED DRONES
+
+                  NOT ALL 128 DRONES
+              ================================= */}
+
+              {activeMissionDrones.map(
                 (drone) => (
 
                   <Marker
-
-                    key={drone.id}
+                    key={
+                      drone.id
+                    }
 
                     position={[
                       drone.latitude,
@@ -510,7 +828,6 @@ function LiveMap() {
                           drone
                         )
                     }}
-
                   >
 
                     <Popup>
@@ -523,7 +840,7 @@ function LiveMap() {
 
                       Status:
                       {" "}
-                      {drone.status}
+                      ACTIVE
 
                       <br />
 
@@ -535,7 +852,7 @@ function LiveMap() {
 
                       Mission:
                       {" "}
-                      {drone.mission}
+                      {operationName}
 
                       <br />
 
@@ -551,21 +868,21 @@ function LiveMap() {
               )}
 
 
-              {/* =========================
-                  DRONE ROUTES
-              ========================== */}
+              {/* =================================
+                  ROUTES
 
-              {drones.map(
+                  ONLY ALLOCATED DRONES
+              ================================= */}
+
+              {activeMissionDrones.map(
                 (drone) => (
 
                   <Polyline
-
                     key={
                       `route-${drone.id}`
                     }
 
                     positions={[
-
                       [
                         drone.latitude,
                         drone.longitude
@@ -575,7 +892,6 @@ function LiveMap() {
                         disaster.latitude,
                         disaster.longitude
                       ]
-
                     ]}
 
                     pathOptions={{
@@ -583,7 +899,6 @@ function LiveMap() {
                       weight: 3,
                       opacity: 0.6
                     }}
-
                   />
 
                 )
@@ -591,366 +906,556 @@ function LiveMap() {
 
             </MapContainer>
 
-          </div>
 
-
-          {/* ===============================
-              RIGHT DRONE PANEL
-          ================================ */}
-
-          <aside
-            style={{
-              borderLeft:
-                "1px solid rgba(255,255,255,0.08)",
-              background: "#11101b",
-              overflowY: "auto",
-              height: "600px"
-            }}
-          >
-
-            {/* PANEL HEADER */}
+            {/* =================================
+                LEGEND
+            ================================= */}
 
             <div
               style={{
-                padding: "18px",
-                borderBottom:
-                  "1px solid rgba(255,255,255,0.08)"
+                position: "absolute",
+
+                zIndex: 1000,
+
+                bottom: "12px",
+
+                left: "12px",
+
+                display: "flex",
+
+                gap: "14px",
+
+                padding: "7px 10px",
+
+                borderRadius: "6px",
+
+                background:
+                  "rgba(13,11,22,0.9)",
+
+                color: "white",
+
+                fontSize: "9px"
               }}
             >
 
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "9px",
-                  letterSpacing: "1px",
-                  color: "#858da5"
-                }}
-              >
-                SWARM STATUS
-              </p>
+              <span>
+                🚁 Drone
+              </span>
 
-              <h3
-                style={{
-                  margin: "5px 0"
-                }}
-              >
-                Drone Fleet
-              </h3>
+              <span>
+                ⚠ Disaster
+              </span>
 
-              <span
-                style={{
-                  fontSize: "10px",
-                  color: "#697386"
-                }}
-              >
-                {drones.length} active demo units
+              <span>
+                👤 Survivor
+              </span>
 
+              <span>
+                ━ Route
+              </span>
+
+              <span>
+                ◯ Mission Area
               </span>
 
             </div>
 
-
-            {/* DRONE LIST */}
-
-            <div>
-
-              {drones.map(
-                (drone) => {
-
-                  const isSelected =
-                    selectedDrone?.id ===
-                    drone.id;
-
-                  return (
-
-                    <div
-                      key={drone.id}
-                      onClick={() =>
-                        setSelectedDrone(
-                          drone
-                        )
-                      }
-                      style={{
-                        padding: "16px",
-                        borderBottom:
-                          "1px solid rgba(255,255,255,0.06)",
-                        cursor: "pointer",
-                        background:
-                          isSelected
-                            ? "rgba(139,92,246,0.10)"
-                            : "transparent",
-                        borderLeft:
-                          isSelected
-                            ? "3px solid #8b5cf6"
-                            : "3px solid transparent"
-                      }}
-                    >
-
-                      {/* DRONE NAME */}
-
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent:
-                            "space-between",
-                          alignItems: "center"
-                        }}
-                      >
-
-                        <strong>
-                          🚁 {drone.id}
-                        </strong>
-
-                        <span
-                          style={{
-                            fontSize: "9px"
-                          }}
-                        >
-                          ● LIVE
-                        </span>
-
-                      </div>
+          </div>
 
 
-                      {/* STATUS */}
+          {/* =================================
+              DRONE SIDEBAR
 
-                      <div
-                        style={{
-                          marginTop: "10px",
-                          display: "grid",
-                          gap: "6px"
-                        }}
-                      >
+              HIDDEN IN FULLSCREEN
+          ================================= */}
+
+          {!fullscreen && (
+
+            <aside
+              style={{
+                minWidth: 0,
+
+                height: "100%",
+
+                overflowY: "auto",
+
+                background: "#11101b",
+
+                borderLeft:
+                  "1px solid rgba(255,255,255,0.08)"
+              }}
+            >
+
+              {/* SIDEBAR HEADER */}
+
+              <div
+                style={{
+                  padding: "18px",
+
+                  borderBottom:
+                    "1px solid rgba(255,255,255,0.08)"
+                }}
+              >
+
+                <p
+                  style={{
+                    margin: 0,
+
+                    fontSize: "9px",
+
+                    letterSpacing: "1px",
+
+                    color: "#858da5"
+                  }}
+                >
+                  SWARM STATUS
+                </p>
+
+                <h3
+                  style={{
+                    margin:
+                      "5px 0"
+                  }}
+                >
+                  Drone Fleet
+                </h3>
+
+                <span
+                  style={{
+                    fontSize: "9px",
+
+                    color: "#697386"
+                  }}
+                >
+                  {activeMissionDrones.length}
+                  {" "}
+                  active mission units
+                </span>
+
+              </div>
+
+
+              {/* =================================
+                  NO ACTIVE OPERATION
+              ================================= */}
+
+              {activeMissionDrones.length === 0 ? (
+
+                <div
+                  style={{
+                    padding: "40px 18px",
+
+                    textAlign: "center",
+
+                    color: "#697386"
+                  }}
+                >
+
+                  <div
+                    style={{
+                      fontSize: "30px",
+                      marginBottom: "10px"
+                    }}
+                  >
+                    🛰️
+                  </div>
+
+                  <strong
+                    style={{
+                      display: "block",
+                      color: "white",
+                      fontSize: "11px"
+                    }}
+                  >
+                    No Active Operation
+                  </strong>
+
+                  <p
+                    style={{
+                      fontSize: "9px",
+                      lineHeight: 1.5
+                    }}
+                  >
+                    Start a mission to display
+                    its allocated drones here.
+                  </p>
+
+                </div>
+
+              ) : (
+
+                /* =================================
+                   ACTIVE DRONES
+                ================================= */
+
+                <div>
+
+                  {activeMissionDrones.map(
+                    (drone) => {
+
+                      const isSelected =
+                        selectedDrone?.id ===
+                        drone.id;
+
+                      return (
 
                         <div
+                          key={
+                            drone.id
+                          }
+
+                          onClick={() =>
+                            setSelectedDrone(
+                              drone
+                            )
+                          }
+
                           style={{
-                            display: "flex",
-                            justifyContent:
-                              "space-between"
+                            padding: "15px",
+
+                            borderBottom:
+                              "1px solid rgba(255,255,255,0.06)",
+
+                            borderLeft:
+                              isSelected
+                                ? "3px solid #8b5cf6"
+                                : "3px solid transparent",
+
+                            background:
+                              isSelected
+                                ? "rgba(139,92,246,0.10)"
+                                : "transparent",
+
+                            cursor: "pointer"
                           }}
                         >
 
-                          <span>
-                            Status
-                          </span>
+                          {/* TITLE */}
 
-                          <strong>
-                            {drone.status}
-                          </strong>
+                          <div
+                            style={{
+                              display: "flex",
+
+                              justifyContent:
+                                "space-between",
+
+                              alignItems:
+                                "center"
+                            }}
+                          >
+
+                            <strong
+                              style={{
+                                fontSize: "12px"
+                              }}
+                            >
+                              🚁 {drone.id}
+                            </strong>
+
+                            <span
+                              style={{
+                                fontSize: "8px",
+                                color: "#35e88a"
+                              }}
+                            >
+                              ● ACTIVE
+                            </span>
+
+                          </div>
+
+
+                          {/* DETAILS */}
+
+                          <div
+                            style={{
+                              marginTop: "12px",
+
+                              display: "grid",
+
+                              gap: "7px"
+                            }}
+                          >
+
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent:
+                                  "space-between",
+                                fontSize: "9px"
+                              }}
+                            >
+
+                              <span
+                                style={{
+                                  color: "#858da5"
+                                }}
+                              >
+                                Status
+                              </span>
+
+                              <strong>
+                                ACTIVE
+                              </strong>
+
+                            </div>
+
+
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent:
+                                  "space-between",
+                                fontSize: "9px"
+                              }}
+                            >
+
+                              <span
+                                style={{
+                                  color: "#858da5"
+                                }}
+                              >
+                                Battery
+                              </span>
+
+                              <span>
+                                🔋 {drone.battery}%
+                              </span>
+
+                            </div>
+
+
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent:
+                                  "space-between",
+                                fontSize: "9px"
+                              }}
+                            >
+
+                              <span
+                                style={{
+                                  color: "#858da5"
+                                }}
+                              >
+                                Survivors
+                              </span>
+
+                              <strong>
+                                👤{" "}
+                                {
+                                  drone.survivorsDetected
+                                }
+                              </strong>
+
+                            </div>
+
+
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent:
+                                  "space-between",
+                                gap: "10px",
+                                fontSize: "9px"
+                              }}
+                            >
+
+                              <span
+                                style={{
+                                  color: "#858da5"
+                                }}
+                              >
+                                Mission
+                              </span>
+
+                              <span>
+                                {operationName}
+                              </span>
+
+                            </div>
+
+                          </div>
+
+
+                          {/* FOCUS BUTTON */}
+
+                          <button
+                            type="button"
+
+                            onClick={(event) => {
+
+                              event.stopPropagation();
+
+                              setSelectedDrone(
+                                drone
+                              );
+
+                            }}
+
+                            style={{
+                              width: "100%",
+
+                              marginTop: "12px",
+
+                              padding: "7px",
+
+                              border: "none",
+
+                              borderRadius: "5px",
+
+                              background: "#7c3aed",
+
+                              color: "white",
+
+                              fontSize: "9px",
+
+                              cursor: "pointer"
+                            }}
+                          >
+                            Focus Drone
+                          </button>
 
                         </div>
 
+                      );
 
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent:
-                              "space-between"
-                          }}
-                        >
+                    }
+                  )}
 
-                          <span>
-                            Battery
-                          </span>
+                </div>
 
-                          <span>
-                            🔋 {drone.battery}%
-                          </span>
-
-                        </div>
-
-
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent:
-                              "space-between"
-                          }}
-                        >
-
-                          <span>
-                            Survivors
-                          </span>
-
-                          <strong>
-                            👤{" "}
-                            {drone.survivorsDetected}
-                          </strong>
-
-                        </div>
-
-
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent:
-                              "space-between"
-                          }}
-                        >
-
-                          <span>
-                            Mission
-                          </span>
-
-                          <span>
-                            {drone.mission}
-                          </span>
-
-                        </div>
-
-                      </div>
-
-
-                      {/* VIEW BUTTON */}
-
-                      <button
-                        type="button"
-                        onClick={(event) => {
-
-                          event.stopPropagation();
-
-                          setSelectedDrone(
-                            drone
-                          );
-
-                        }}
-                        style={{
-                          marginTop: "12px",
-                          width: "100%",
-                          cursor: "pointer",
-                          padding: "7px"
-                        }}
-                      >
-                        Focus Drone
-                      </button>
-
-                    </div>
-
-                  );
-
-                }
               )}
 
-            </div>
+            </aside>
 
-          </aside>
+          )}
 
         </div>
 
 
         {/* =================================
-            BOTTOM STATUS BAR
+            NORMAL MODE FOOTER
         ================================= */}
 
-        <div
-          style={{
-            padding: "11px 18px",
-            display: "flex",
-            justifyContent:
-              "space-between",
-            alignItems: "center",
-            gap: "15px",
-            flexWrap: "wrap",
-            borderTop:
-              "1px solid rgba(255,255,255,0.08)"
-          }}
-        >
-
-          {/* LEGEND */}
+        {!fullscreen && (
 
           <div
             style={{
+              minHeight: "34px",
+
+              padding:
+                "8px 14px",
+
               display: "flex",
-              gap: "18px",
-              flexWrap: "wrap",
-              fontSize: "10px"
-            }}
-          >
 
-            <span>
-              🚁 Drone
-            </span>
+              justifyContent:
+                "space-between",
 
-            <span>
-              ⚠ Disaster
-            </span>
+              alignItems: "center",
 
-            <span>
-              👤 Survivor
-            </span>
+              gap: "15px",
 
-            <span>
-              ━ Route
-            </span>
+              borderTop:
+                "1px solid rgba(255,255,255,0.08)",
 
-            <span>
-              ◯ Mission Area
-            </span>
+              fontSize: "9px",
 
-          </div>
-
-
-          {/* SELECTED DRONE */}
-
-          <span
-            style={{
-              fontSize: "10px",
               color: "#858da5"
             }}
           >
 
-            {selectedDrone
-              ? `Tracking ${selectedDrone.id}`
-              : "Select a drone to track"}
+            <div
+              style={{
+                display: "flex",
+                gap: "15px"
+              }}
+            >
 
-          </span>
+              <span>
+                🚁 Active Drone
+              </span>
 
-        </div>
+              <span>
+                ⚠ Disaster
+              </span>
+
+              <span>
+                👤 Survivor
+              </span>
+
+              <span>
+                ━ Route
+              </span>
+
+              <span>
+                ◯ Mission Area
+              </span>
+
+            </div>
+
+            <span>
+
+              {selectedDrone
+                ? `Tracking ${selectedDrone.id}`
+                : "Select a drone to track"}
+
+            </span>
+
+          </div>
+
+        )}
 
       </section>
 
 
       {/* ==================================
-          INTEGRATION NOTE
+          INTEGRATION INFO
       ================================== */}
 
-      <section
-        className="map-panel"
-        style={{
-          marginTop: "18px"
-        }}
-      >
+      {!fullscreen && (
 
-        <div
+        <section
+          className="map-panel"
           style={{
-            padding: "15px",
-            color: "#697386",
-            fontSize: "10px"
+            marginTop: "18px"
           }}
         >
 
-          <strong>
-            Integration fields:
-          </strong>
+          <div
+            style={{
+              padding: "15px",
 
-          {" "}
-          Drone position → Localisation
+              color: "#697386",
 
-          {" | "}
+              fontSize: "10px"
+            }}
+          >
 
-          Survivor position → Perception
+            <strong>
+              Integration fields:
+            </strong>
 
-          {" | "}
+            {" "}
+            Drone position → Localisation
 
-          Route → Simulation / Path Planning
+            {" | "}
 
-          {" | "}
+            Survivor position → Perception
 
-          Drone status → Swarm System
+            {" | "}
 
-        </div>
+            Route → Simulation / Path Planning
 
-      </section>
+            {" | "}
+
+            Drone status → Swarm System
+
+          </div>
+
+        </section>
+
+      )}
 
     </main>
   );

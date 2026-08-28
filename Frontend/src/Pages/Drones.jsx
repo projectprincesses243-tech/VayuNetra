@@ -1,18 +1,111 @@
 import { drones } from "../data/demoData";
+import { getActiveOperation } from "../data/operationStorage";
 
 
 function Drones() {
 
-  // Demo fleet summary
-  const totalFleet = 128;
-  const available = 94;
-  const active = 21;
-  const charging = 8;
-  const unavailable = 5;
+  // ==========================================
+  // GET CURRENT ACTIVE OPERATION
+  // ==========================================
+
+  const activeOperation =
+    getActiveOperation();
+
+
+  // ==========================================
+  // FLEET COUNTS
+  // ==========================================
+
+  const totalFleet = drones.length;
+
+  const available =
+    drones.filter(
+      drone => drone.status === "AVAILABLE"
+    ).length;
+
+  const charging =
+    drones.filter(
+      drone => drone.status === "CHARGING"
+    ).length;
+
+  const unavailable =
+    drones.filter(
+      drone => drone.status === "UNAVAILABLE"
+    ).length;
+
+
+  // ==========================================
+  // ACTIVE DRONES
+  // ==========================================
+  //
+  // If an operation is currently running,
+  // use the exact drones allocated to it.
+  //
+  // Otherwise use the demo ACTIVE drones.
+  // ==========================================
+
+  const operationDroneIds =
+    activeOperation?.assignedDrones || [];
+
+
+  const activeDrones =
+    operationDroneIds.length > 0
+
+      ? drones.filter(drone =>
+          operationDroneIds.includes(drone.id)
+        )
+
+      : drones.filter(
+          drone => drone.status === "ACTIVE"
+        );
+
+
+  const active =
+    activeDrones.length;
+
+
+  // ==========================================
+  // DISPLAY FLEET
+  // ==========================================
+
+  const displayDrones =
+    drones.map(drone => {
+
+      const operationDrone =
+        activeDrones.find(
+          activeDrone =>
+            activeDrone.id === drone.id
+        );
+
+
+      if (operationDrone) {
+
+        return {
+
+          ...drone,
+
+          status: "ACTIVE",
+
+          mission:
+            activeOperation?.operation ||
+            activeOperation?.name ||
+            drone.mission ||
+            "Active Operation"
+
+        };
+
+      }
+
+
+      return drone;
+
+    });
 
 
   return (
+
     <main className="dashboard">
+
 
       {/* =========================
           PAGE HEADER
@@ -55,6 +148,9 @@ function Drones() {
 
       <section className="dashboard-grid">
 
+
+        {/* TOTAL */}
+
         <div className="dashboard-card">
 
           <div className="card-icon">
@@ -79,6 +175,8 @@ function Drones() {
 
         </div>
 
+
+        {/* AVAILABLE */}
 
         <div className="dashboard-card">
 
@@ -105,6 +203,8 @@ function Drones() {
         </div>
 
 
+        {/* ACTIVE */}
+
         <div className="dashboard-card">
 
           <div className="card-icon">
@@ -129,6 +229,8 @@ function Drones() {
 
         </div>
 
+
+        {/* CHARGING */}
 
         <div className="dashboard-card">
 
@@ -190,6 +292,9 @@ function Drones() {
 
         <div style={{ padding: "25px" }}>
 
+
+          {/* AVAILABLE */}
+
           <div className="action-item">
 
             <span className="action-indicator"></span>
@@ -209,6 +314,8 @@ function Drones() {
           </div>
 
 
+          {/* ACTIVE */}
+
           <div className="action-item">
 
             <span className="action-indicator"></span>
@@ -220,13 +327,19 @@ function Drones() {
               </strong>
 
               <p>
-                Currently assigned to operations
+
+                {activeOperation
+                  ? `Assigned to ${activeOperation.operation || "active operation"}`
+                  : "Currently assigned to operations"}
+
               </p>
 
             </div>
 
           </div>
 
+
+          {/* CHARGING */}
 
           <div className="action-item">
 
@@ -247,11 +360,15 @@ function Drones() {
           </div>
 
 
+          {/* UNAVAILABLE */}
+
           <div className="action-item">
 
             <span
               className="action-indicator"
-              style={{ background: "#64748b" }}
+              style={{
+                background: "#64748b"
+              }}
             ></span>
 
             <div>
@@ -298,7 +415,7 @@ function Drones() {
 
 
           <span className="map-status">
-            {drones.length} DEMO UNITS
+            {displayDrones.length} DEMO UNITS
           </span>
 
         </div>
@@ -312,7 +429,7 @@ function Drones() {
           }}
         >
 
-          {drones.map((drone) => (
+          {displayDrones.map((drone) => (
 
             <div
               key={drone.id}
@@ -325,6 +442,7 @@ function Drones() {
                 gap: "20px"
               }}
             >
+
 
               {/* DRONE ID */}
 
@@ -365,7 +483,7 @@ function Drones() {
                 </p>
 
                 <span>
-                  {drone.mission}
+                  {drone.mission || "Station"}
                 </span>
 
               </div>
@@ -432,13 +550,21 @@ function Drones() {
 
           {" "}
           Drone ID → Swarm System
+
           {" | "}
+
           Status → Simulation
+
           {" | "}
+
           Battery → Hardware
+
           {" | "}
+
           Mission → Mission Allocation
+
           {" | "}
+
           Survivor Count → Perception
 
         </div>

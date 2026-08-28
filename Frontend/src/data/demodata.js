@@ -2,172 +2,112 @@
 // VayuNetra Frontend Demo Data
 // ==========================================
 //
-// MOCK data only.
+// MOCK DATA ONLY
 //
-// This is the single source of truth for the
-// frontend demo.
+// This file contains the common demo data
+// used by the frontend.
 //
 // Later, the integration person can replace
-// these values with real data from:
+// these values with real data coming from:
 //
 // - Perception
 // - Localisation
 // - Simulation
 // - Path Planning
-// - Drone hardware
+// - Hardware / ESP32
 //
 // ==========================================
 
 
 // ==========================================
-// FLEET CONFIGURATION
-// ==========================================
-
-export const fleet = {
-
-  total: 128,
-
-  charging: 8,
-
-  unavailable: 20
-
-};
-
-
-// ==========================================
-// DRONE DATA
+// DRONE FLEET
 // ==========================================
 //
-// Only drones with deployed: true are shown
-// as operating on the Live Map.
+// 128 registered drones
 //
-// Currently 6 drones are deployed.
+// Initial fleet:
+//
+// 100 AVAILABLE
+// 12 ACTIVE
+// 8 CHARGING
+// 8 UNAVAILABLE
+//
+// Drone IDs:
+// DR-001 ... DR-128
+//
 // ==========================================
 
-export const drones = [
-
-  {
-    id: "DR-001",
-    latitude: 15.3173,
-    longitude: 75.7139,
-
-    status: "SEARCHING",
-
-    battery: 87,
-
-    mission: "Landslide Search",
-
-    survivorsDetected: 1,
-
-    deployed: true
-  },
-
-  {
-    id: "DR-002",
-    latitude: 15.3273,
-    longitude: 75.7239,
-
-    status: "SEARCHING",
-
-    battery: 74,
-
-    mission: "Flood Search",
-
-    survivorsDetected: 0,
-
-    deployed: true
-  },
-
-  {
-    id: "DR-003",
-    latitude: 15.3073,
-    longitude: 75.7039,
-
-    status: "SURVIVOR FOUND",
-
-    battery: 61,
-
-    mission: "Flood Rescue",
-
-    survivorsDetected: 3,
-
-    deployed: true
-  },
-
-  {
-    id: "DR-004",
-    latitude: 15.3373,
-    longitude: 75.6939,
-
-    status: "RETURNING",
-
-    battery: 48,
-
-    mission: "Building Fire",
-
-    survivorsDetected: 0,
-
-    deployed: true
-  },
-
-  {
-    id: "DR-005",
-    latitude: 15.3223,
-    longitude: 75.6989,
-
-    status: "SEARCHING",
-
-    battery: 92,
-
-    mission: "Flood Rescue",
-
-    survivorsDetected: 1,
-
-    deployed: true
-  },
-
-  {
-    id: "DR-006",
-    latitude: 15.3023,
-    longitude: 75.7189,
-
-    status: "SCANNING",
-
-    battery: 79,
-
-    mission: "Flood Rescue",
-
-    survivorsDetected: 0,
-
-    deployed: true
-  }
-
+const droneStatuses = [
+  ...Array(100).fill("AVAILABLE"),
+  ...Array(12).fill("ACTIVE"),
+  ...Array(8).fill("CHARGING"),
+  ...Array(8).fill("UNAVAILABLE")
 ];
 
 
-// ==========================================
-// DERIVED FLEET VALUES
-// ==========================================
-//
-// These values should NOT be manually typed
-// into individual pages.
-// ==========================================
+export const drones = droneStatuses.map((status, index) => {
 
-export const deployedDrones =
-  drones.filter(
-    drone => drone.deployed === true
-  );
+  const droneNumber = index + 1;
 
+  return {
 
-export const activeDrones =
-  deployedDrones.length;
+    // --------------------------------------
+    // UNIQUE DRONE ID
+    // --------------------------------------
 
+    id:
+      `DR-${String(droneNumber).padStart(3, "0")}`,
 
-export const availableDrones =
-  fleet.total -
-  activeDrones -
-  fleet.charging -
-  fleet.unavailable;
+    // --------------------------------------
+    // DEMO LOCATION
+    // --------------------------------------
+
+    latitude:
+      15.3173 +
+      (index % 10) * 0.001,
+
+    longitude:
+      75.7139 +
+      Math.floor(index / 10) * 0.001,
+
+    // --------------------------------------
+    // FLEET STATUS
+    // --------------------------------------
+
+    status,
+
+    // --------------------------------------
+    // BATTERY
+    // --------------------------------------
+
+    battery:
+      status === "CHARGING"
+        ? 40 + (index % 35)
+        : status === "UNAVAILABLE"
+        ? 20 + (index % 40)
+        : 75 + (index % 26),
+
+    // --------------------------------------
+    // CURRENT MISSION
+    // --------------------------------------
+
+    mission:
+      status === "ACTIVE"
+        ? "Existing Operation"
+        : null,
+
+    // --------------------------------------
+    // SURVIVORS DETECTED
+    // --------------------------------------
+
+    survivorsDetected:
+      status === "ACTIVE"
+        ? index % 3
+        : 0
+
+  };
+
+});
 
 
 // ==========================================
@@ -183,10 +123,7 @@ export const survivors = [
 
     longitude: 75.7045,
 
-    confidence: 94,
-
-    detectedBy: "DR-003"
-
+    confidence: 94
   },
 
   {
@@ -196,10 +133,7 @@ export const survivors = [
 
     longitude: 75.7055,
 
-    confidence: 91,
-
-    detectedBy: "DR-003"
-
+    confidence: 91
   },
 
   {
@@ -209,36 +143,7 @@ export const survivors = [
 
     longitude: 75.7028,
 
-    confidence: 89,
-
-    detectedBy: "DR-003"
-
-  },
-
-  {
-    id: "SV-004",
-
-    latitude: 15.3190,
-
-    longitude: 75.7115,
-
-    confidence: 92,
-
-    detectedBy: "DR-005"
-
-  },
-
-  {
-    id: "SV-005",
-
-    latitude: 15.3210,
-
-    longitude: 75.7130,
-
-    confidence: 87,
-
-    detectedBy: "DR-001"
-
+    confidence: 89
   }
 
 ];
@@ -325,30 +230,6 @@ export const detections = [
     sensor: "RGB",
 
     disasterType: "Earthquake"
-  },
-
-  {
-    droneId: "DR-005",
-
-    object: "Survivor",
-
-    confidence: 92,
-
-    sensor: "Thermal",
-
-    disasterType: "Flood"
-  },
-
-  {
-    droneId: "DR-001",
-
-    object: "Survivor",
-
-    confidence: 87,
-
-    sensor: "RGB",
-
-    disasterType: "Flood"
   }
 
 ];
@@ -356,6 +237,16 @@ export const detections = [
 
 // ==========================================
 // MISSIONS
+// ==========================================
+//
+// These are the demo rescue scenarios.
+//
+// IMPORTANT:
+// assignedDrone is initially null.
+//
+// Missions.jsx will allocate the actual
+// drone IDs from the drone fleet.
+//
 // ==========================================
 
 export const missions = [
@@ -369,16 +260,9 @@ export const missions = [
 
     priority: "HIGH",
 
-    status: "ACTIVE",
+    status: "PENDING",
 
-    assignedDrones: [
-      "DR-002",
-      "DR-003",
-      "DR-005",
-      "DR-006"
-    ],
-
-    progress: 72
+    assignedDrone: null
   },
 
   {
@@ -390,13 +274,9 @@ export const missions = [
 
     priority: "MEDIUM",
 
-    status: "ACTIVE",
+    status: "PENDING",
 
-    assignedDrones: [
-      "DR-001"
-    ],
-
-    progress: 58
+    assignedDrone: null
   },
 
   {
@@ -408,39 +288,9 @@ export const missions = [
 
     priority: "HIGH",
 
-    status: "ACTIVE",
+    status: "PENDING",
 
-    assignedDrones: [
-      "DR-004"
-    ],
-
-    progress: 41
+    assignedDrone: null
   }
 
 ];
-
-
-// ==========================================
-// ACTIVE OPERATION
-// ==========================================
-//
-// This represents the operation currently
-// being demonstrated.
-// ==========================================
-
-export const activeOperation = {
-
-  id: "OP-001",
-
-  mission: "Flood Rescue",
-
-  status: "ACTIVE",
-
-  progress: 72,
-
-  deployedDroneCount: activeDrones,
-
-  survivorsDetected:
-    survivors.length
-
-};

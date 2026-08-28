@@ -5,6 +5,7 @@ import Missions from "./pages/Missions";
 import Drones from "./pages/Drones";
 import LiveMap from "./pages/LiveMap";
 import Perception from "./pages/Perception";
+import History from "./pages/History";
 
 import "./App.css";
 
@@ -17,13 +18,18 @@ function App() {
         <header className="topbar">
 
           <div className="brand">
-            <div className="brand-logo">✦</div>
+
+            <div className="brand-logo">
+              ✦
+            </div>
 
             <div>
               <h1>VayuNetra</h1>
               <p>Wings of Hope</p>
             </div>
+
           </div>
+
 
           {/* NAVIGATION */}
           <nav className="navigation">
@@ -36,12 +42,14 @@ function App() {
               Dashboard
             </NavLink>
 
+
             <NavLink
               to="/missions"
               className="nav-item"
             >
               Missions
             </NavLink>
+
 
             <NavLink
               to="/drones"
@@ -50,12 +58,14 @@ function App() {
               Drones
             </NavLink>
 
+
             <NavLink
               to="/map"
               className="nav-item"
             >
               Live Map
             </NavLink>
+
 
             <NavLink
               to="/perception"
@@ -64,15 +74,29 @@ function App() {
               Perception
             </NavLink>
 
+
+            {/* NEW */}
+            <NavLink
+              to="/history"
+              className="nav-item"
+            >
+              History
+            </NavLink>
+
           </nav>
+
 
           {/* SYSTEM STATUS */}
           <div className="system-status">
+
             <span className="status-dot"></span>
+
             SYSTEM ONLINE
+
           </div>
 
         </header>
+
 
         {/* PAGE ROUTES */}
         <Routes>
@@ -82,24 +106,35 @@ function App() {
             element={<Dashboard />}
           />
 
+
           <Route
             path="/missions"
             element={<Missions />}
           />
+
 
           <Route
             path="/drones"
             element={<Drones />}
           />
 
+
           <Route
             path="/map"
             element={<LiveMap />}
           />
 
+
           <Route
             path="/perception"
             element={<Perception />}
+          />
+
+
+          {/* NEW HISTORY PAGE */}
+          <Route
+            path="/history"
+            element={<History />}
           />
 
         </Routes>

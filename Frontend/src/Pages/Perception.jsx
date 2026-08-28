@@ -7,68 +7,204 @@ import buildingCollapse from "../assets/demoperceptionimages/buildingcollapse.pn
 import earthquake from "../assets/demoperceptionimages/earthquake.png";
 
 
+// ==========================================
+// PERCEPTION DEMO DATA
+// ==========================================
+
+const images = [
+  {
+    name: "Flood Detection",
+    file: flood1,
+    type: "Flood",
+    drone: "DR-003",
+    detections: 3,
+    confidence: "94%",
+    sensor: "RGB + Thermal",
+    object: "Survivor"
+  },
+
+  {
+    name: "Flood Search Area",
+    file: flood2,
+    type: "Flood",
+    drone: "DR-002",
+    detections: 2,
+    confidence: "91%",
+    sensor: "RGB",
+    object: "Survivor"
+  },
+
+  {
+    name: "Landslide Detection",
+    file: landslide,
+    type: "Landslide",
+    drone: "DR-001",
+    detections: 4,
+    confidence: "88%",
+    sensor: "RGB",
+    object: "Debris"
+  },
+
+  {
+    name: "Building Collapse",
+    file: buildingCollapse,
+    type: "Building Collapse",
+    drone: "DR-004",
+    detections: 2,
+    confidence: "89%",
+    sensor: "RGB",
+    object: "Structural Damage"
+  },
+
+  {
+    name: "Earthquake Damage",
+    file: earthquake,
+    type: "Earthquake",
+    drone: "DR-003",
+    detections: 5,
+    confidence: "86%",
+    sensor: "RGB",
+    object: "Structural Damage"
+  }
+];
+
+
+// ==========================================
+// DETECTION LOG DATA
+// ==========================================
+
+const detectionLogs = [
+  {
+    drone: "DR-003",
+    object: "Survivor",
+    confidence: "94%",
+    sensor: "Thermal",
+    disaster: "Flood"
+  },
+
+  {
+    drone: "DR-003",
+    object: "Survivor",
+    confidence: "91%",
+    sensor: "RGB",
+    disaster: "Flood"
+  },
+
+  {
+    drone: "DR-001",
+    object: "Debris",
+    confidence: "88%",
+    sensor: "RGB",
+    disaster: "Landslide"
+  },
+
+  {
+    drone: "DR-004",
+    object: "Structural Damage",
+    confidence: "89%",
+    sensor: "RGB",
+    disaster: "Building Collapse"
+  },
+
+  {
+    drone: "DR-003",
+    object: "Structural Damage",
+    confidence: "86%",
+    sensor: "RGB",
+    disaster: "Earthquake"
+  }
+];
+
+
+// ==========================================
+// PERCEPTION
+// ==========================================
+
 function Perception() {
 
-  // DEMO PERCEPTION DATA
-  // Later this can be replaced by the actual perception model output.
+  const [selectedImage, setSelectedImage] =
+    useState(images[0]);
 
-  const images = [
-    {
-      name: "Flood Detection",
-      file: flood1,
-      type: "Flood",
-      drone: "DR-003",
-      detections: 3,
-      confidence: "94%",
-      sensor: "RGB + Thermal"
-    },
+  const [simulated, setSimulated] =
+    useState(false);
 
-    {
-      name: "Flood Search Area",
-      file: flood2,
-      type: "Flood",
-      drone: "DR-002",
-      detections: 2,
-      confidence: "91%",
-      sensor: "RGB"
-    },
-
-    {
-      name: "Landslide Detection",
-      file: landslide,
-      type: "Landslide",
-      drone: "DR-001",
-      detections: 4,
-      confidence: "88%",
-      sensor: "RGB"
-    },
-
-    {
-      name: "Building Collapse",
-      file: buildingCollapse,
-      type: "Building Collapse",
-      drone: "DR-004",
-      detections: 2,
-      confidence: "89%",
-      sensor: "RGB"
-    },
-
-    {
-      name: "Earthquake Damage",
-      file: earthquake,
-      type: "Earthquake",
-      drone: "DR-003",
-      detections: 5,
-      confidence: "86%",
-      sensor: "RGB"
-    }
-  ];
+  const [simulationMessage, setSimulationMessage] =
+    useState("");
 
 
-  const [selectedImage, setSelectedImage] = useState(images[0]);
+  // ========================================
+  // SIMULATE PERCEPTION
+  // ========================================
+
+  const simulatePerception = () => {
+
+    const randomIndex =
+      Math.floor(
+        Math.random() * images.length
+      );
+
+    const result =
+      images[randomIndex];
+
+    setSelectedImage(result);
+
+    setSimulated(true);
+
+    setSimulationMessage(
+      `${result.type} perception result generated`
+    );
+  };
+
+
+  // ========================================
+  // MANUAL IMAGE SELECTION
+  // ========================================
+
+  const selectImage = (image) => {
+
+    setSelectedImage(image);
+
+    setSimulated(false);
+
+    setSimulationMessage("");
+
+  };
+
+
+  // ========================================
+  // ONLY SHOW LOGS FOR CURRENT DISASTER
+  // ========================================
+
+  const filteredLogs =
+    detectionLogs.filter(
+      (log) =>
+        log.disaster ===
+        selectedImage.type
+    );
+
+
+  // ========================================
+  // DYNAMIC SUMMARY VALUES
+  // ========================================
+
+  const survivorCount =
+    selectedImage.object === "Survivor"
+      ? selectedImage.detections
+      : 0;
+
+  const debrisCount =
+    selectedImage.object === "Debris"
+      ? selectedImage.detections
+      : 0;
+
+  const structuralCount =
+    selectedImage.object === "Structural Damage"
+      ? selectedImage.detections
+      : 0;
 
 
   return (
+
     <main className="dashboard">
 
       {/* =========================
@@ -102,6 +238,107 @@ function Perception() {
           PERCEPTION ONLINE
 
         </div>
+
+      </section>
+
+
+      {/* =========================
+          SIMULATION CONTROL
+      ========================== */}
+
+      <section
+        className="map-panel"
+        style={{ marginTop: "18px" }}
+      >
+
+        <div
+          style={{
+            padding: "18px 20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "20px",
+            flexWrap: "wrap"
+          }}
+        >
+
+          <div>
+
+            <p
+              style={{
+                margin: 0,
+                fontSize: "9px",
+                letterSpacing: "1px",
+                color: "#858da5"
+              }}
+            >
+              PERCEPTION SIMULATION
+            </p>
+
+            <h3
+              style={{
+                margin: "5px 0"
+              }}
+            >
+              Simulate Disaster Detection
+            </h3>
+
+            <span
+              style={{
+                color: "#697386",
+                fontSize: "9px"
+              }}
+            >
+              Generate a random disaster perception result
+            </span>
+
+          </div>
+
+
+          <button
+            type="button"
+            onClick={simulatePerception}
+            style={{
+              padding: "11px 20px",
+              border: "none",
+              borderRadius: "7px",
+              background: "#7c3aed",
+              color: "#ffffff",
+              fontSize: "10px",
+              fontWeight: "700",
+              cursor: "pointer",
+              boxShadow:
+                "0 5px 18px rgba(124,58,237,0.25)"
+            }}
+          >
+            ▶ SIMULATE PERCEPTION
+          </button>
+
+        </div>
+
+
+        {simulated && (
+
+          <div
+            style={{
+              margin:
+                "0 20px 18px",
+              padding: "10px 13px",
+              borderRadius: "6px",
+              background:
+                "rgba(53,232,138,0.08)",
+              border:
+                "1px solid rgba(53,232,138,0.2)",
+              color: "#35e88a",
+              fontSize: "9px"
+            }}
+          >
+
+            ● {simulationMessage}
+
+          </div>
+
+        )}
 
       </section>
 
@@ -206,7 +443,8 @@ function Perception() {
                 <div>
                   🚁 Drone:
                   <strong>
-                    {" "}{selectedImage.drone}
+                    {" "}
+                    {selectedImage.drone}
                   </strong>
                 </div>
 
@@ -214,7 +452,8 @@ function Perception() {
                 <div>
                   🎯 Confidence:
                   <strong>
-                    {" "}{selectedImage.confidence}
+                    {" "}
+                    {selectedImage.confidence}
                   </strong>
                 </div>
 
@@ -222,7 +461,8 @@ function Perception() {
                 <div>
                   👁 Objects Detected:
                   <strong>
-                    {" "}{selectedImage.detections}
+                    {" "}
+                    {selectedImage.detections}
                   </strong>
                 </div>
 
@@ -230,7 +470,8 @@ function Perception() {
                 <div>
                   📡 Sensor:
                   <strong>
-                    {" "}{selectedImage.sensor}
+                    {" "}
+                    {selectedImage.sensor}
                   </strong>
                 </div>
 
@@ -285,11 +526,14 @@ function Perception() {
 
             <button
               key={image.name}
-              onClick={() => setSelectedImage(image)}
+              onClick={() =>
+                selectImage(image)
+              }
               style={{
                 padding: "0",
                 border:
-                  selectedImage.name === image.name
+                  selectedImage.name ===
+                  image.name
                     ? "2px solid #8b5cf6"
                     : "1px solid rgba(255,255,255,0.08)",
                 borderRadius: "12px",
@@ -398,34 +642,11 @@ function Perception() {
                 </p>
 
                 <h3>
-                  3
+                  {survivorCount}
                 </h3>
 
                 <span>
                   Detected persons
-                </span>
-
-              </div>
-
-            </div>
-
-
-            {/* FIRE */}
-
-            <div className="dashboard-card">
-
-              <div>
-
-                <p>
-                  FIRE
-                </p>
-
-                <h3>
-                  1
-                </h3>
-
-                <span>
-                  Fire detection
                 </span>
 
               </div>
@@ -444,11 +665,34 @@ function Perception() {
                 </p>
 
                 <h3>
-                  4
+                  {debrisCount}
                 </h3>
 
                 <span>
                   Obstacles detected
+                </span>
+
+              </div>
+
+            </div>
+
+
+            {/* STRUCTURAL DAMAGE */}
+
+            <div className="dashboard-card">
+
+              <div>
+
+                <p>
+                  STRUCTURAL
+                </p>
+
+                <h3>
+                  {structuralCount}
+                </h3>
+
+                <span>
+                  Structural detections
                 </span>
 
               </div>
@@ -518,178 +762,101 @@ function Perception() {
           }}
         >
 
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "11px"
-            }}
-          >
+          {filteredLogs.length === 0 ? (
 
-            <thead>
+            <div
+              style={{
+                padding: "20px",
+                textAlign: "center",
+                color: "#697386",
+                fontSize: "10px"
+              }}
+            >
+              No detection log available for this disaster type.
+            </div>
 
-              <tr
-                style={{
-                  textAlign: "left",
-                  borderBottom:
-                    "1px solid rgba(255,255,255,0.08)"
-                }}
-              >
+          ) : (
 
-                <th style={thStyle}>
-                  DRONE
-                </th>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: "11px"
+              }}
+            >
 
-                <th style={thStyle}>
-                  OBJECT
-                </th>
+              <thead>
 
-                <th style={thStyle}>
-                  CONFIDENCE
-                </th>
+                <tr
+                  style={{
+                    textAlign: "left",
+                    borderBottom:
+                      "1px solid rgba(255,255,255,0.08)"
+                  }}
+                >
 
-                <th style={thStyle}>
-                  SENSOR
-                </th>
+                  <th style={thStyle}>
+                    DRONE
+                  </th>
 
-                <th style={thStyle}>
-                  DISASTER
-                </th>
+                  <th style={thStyle}>
+                    OBJECT
+                  </th>
 
-              </tr>
+                  <th style={thStyle}>
+                    CONFIDENCE
+                  </th>
 
-            </thead>
+                  <th style={thStyle}>
+                    SENSOR
+                  </th>
 
+                  <th style={thStyle}>
+                    DISASTER
+                  </th>
 
-            <tbody>
+                </tr>
 
-              <tr>
-
-                <td style={tdStyle}>
-                  DR-003
-                </td>
-
-                <td style={tdStyle}>
-                  Survivor
-                </td>
-
-                <td style={tdStyle}>
-                  94%
-                </td>
-
-                <td style={tdStyle}>
-                  Thermal
-                </td>
-
-                <td style={tdStyle}>
-                  Flood
-                </td>
-
-              </tr>
+              </thead>
 
 
-              <tr>
+              <tbody>
 
-                <td style={tdStyle}>
-                  DR-003
-                </td>
+                {filteredLogs.map(
+                  (log, index) => (
 
-                <td style={tdStyle}>
-                  Survivor
-                </td>
+                    <tr key={index}>
 
-                <td style={tdStyle}>
-                  91%
-                </td>
+                      <td style={tdStyle}>
+                        {log.drone}
+                      </td>
 
-                <td style={tdStyle}>
-                  RGB
-                </td>
+                      <td style={tdStyle}>
+                        {log.object}
+                      </td>
 
-                <td style={tdStyle}>
-                  Flood
-                </td>
+                      <td style={tdStyle}>
+                        {log.confidence}
+                      </td>
 
-              </tr>
+                      <td style={tdStyle}>
+                        {log.sensor}
+                      </td>
 
+                      <td style={tdStyle}>
+                        {log.disaster}
+                      </td>
 
-              <tr>
+                    </tr>
 
-                <td style={tdStyle}>
-                  DR-001
-                </td>
+                  )
+                )}
 
-                <td style={tdStyle}>
-                  Debris
-                </td>
+              </tbody>
 
-                <td style={tdStyle}>
-                  88%
-                </td>
+            </table>
 
-                <td style={tdStyle}>
-                  RGB
-                </td>
-
-                <td style={tdStyle}>
-                  Landslide
-                </td>
-
-              </tr>
-
-
-              <tr>
-
-                <td style={tdStyle}>
-                  DR-004
-                </td>
-
-                <td style={tdStyle}>
-                  Structural Damage
-                </td>
-
-                <td style={tdStyle}>
-                  89%
-                </td>
-
-                <td style={tdStyle}>
-                  RGB
-                </td>
-
-                <td style={tdStyle}>
-                  Building Collapse
-                </td>
-
-              </tr>
-
-
-              <tr>
-
-                <td style={tdStyle}>
-                  DR-003
-                </td>
-
-                <td style={tdStyle}>
-                  Structural Damage
-                </td>
-
-                <td style={tdStyle}>
-                  86%
-                </td>
-
-                <td style={tdStyle}>
-                  RGB
-                </td>
-
-                <td style={tdStyle}>
-                  Earthquake
-                </td>
-
-              </tr>
-
-            </tbody>
-
-          </table>
+          )}
 
         </div>
 
@@ -737,9 +904,9 @@ function Perception() {
 }
 
 
-/* =========================
-   TABLE HEADER STYLE
-========================= */
+// ==========================================
+// TABLE STYLES
+// ==========================================
 
 const thStyle = {
   padding: "12px",
@@ -749,10 +916,6 @@ const thStyle = {
   fontWeight: "600"
 };
 
-
-/* =========================
-   TABLE DATA STYLE
-========================= */
 
 const tdStyle = {
   padding: "12px",
