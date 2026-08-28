@@ -1,123 +1,583 @@
+/* =========================================
+   VAYUNETRA — MAIN DASHBOARD
+   ========================================= */
+
 * {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  margin: 0;
-  font-family: Arial, Helvetica, sans-serif;
-  background: #080b10;
-  color: #f4f7fb;
+  font-family: Inter, Arial, sans-serif;
+  background: #070b14;
+  color: #f5f7fb;
+}
+
+button {
+  font-family: inherit;
 }
 
 .app {
   min-height: 100vh;
   background:
-    radial-gradient(circle at 80% 10%, rgba(0, 180, 255, 0.08), transparent 30%),
-    radial-gradient(circle at 20% 80%, rgba(120, 70, 255, 0.08), transparent 30%),
-    #080b10;
+    radial-gradient(circle at 75% 10%, rgba(91, 70, 180, 0.18), transparent 30%),
+    radial-gradient(circle at 10% 80%, rgba(0, 170, 255, 0.08), transparent 30%),
+    #070b14;
 }
 
+
+/* =========================================
+   TOP BAR
+   ========================================= */
+
 .topbar {
-  height: 78px;
-  padding: 0 42px;
+  height: 76px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #202833;
-  background: rgba(10, 14, 20, 0.92);
+
+  padding: 0 38px;
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+  background: rgba(7, 11, 20, 0.88);
+  backdrop-filter: blur(14px);
+
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: 12px;
+  min-width: 220px;
 }
 
-.brand-mark {
+.brand-logo {
   width: 42px;
   height: 42px;
-  display: grid;
-  place-items: center;
-  border: 1px solid #344252;
-  border-radius: 10px;
-  color: #36d9ff;
-  font-size: 21px;
-  background: #111822;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 12px;
+
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+
+  font-size: 22px;
+
+  box-shadow: 0 0 25px rgba(124, 58, 237, 0.35);
 }
 
 .brand h1 {
-  margin: 0;
-  font-size: 19px;
-  letter-spacing: 3px;
+  font-size: 20px;
+  letter-spacing: 0.5px;
 }
 
 .brand p {
-  margin: 4px 0 0;
-  font-size: 9px;
-  letter-spacing: 3px;
-  color: #7d8a99;
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 3px;
 }
 
-.system-status {
+
+/* =========================================
+   NAVIGATION
+   ========================================= */
+
+.navigation {
   display: flex;
+  gap: 6px;
+}
+
+.nav-item {
+  border: none;
+  background: transparent;
+
+  color: #8f98a8;
+
+  padding: 10px 14px;
+
+  border-radius: 9px;
+
+  cursor: pointer;
+
+  font-size: 13px;
+
+  transition: 0.2s;
+}
+
+.nav-item:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.nav-item.active {
+  color: white;
+  background: rgba(124, 58, 237, 0.18);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+}
+
+
+/* =========================================
+   SYSTEM STATUS
+   ========================================= */
+
+.system-status {
+  min-width: 160px;
+
+  display: flex;
+  justify-content: flex-end;
   align-items: center;
-  gap: 9px;
-  padding: 9px 14px;
-  border: 1px solid #27333f;
-  border-radius: 8px;
-  color: #b7c3ce;
+  gap: 8px;
+
   font-size: 11px;
-  letter-spacing: 1px;
+  letter-spacing: 0.8px;
+
+  color: #a7f3d0;
 }
 
 .status-dot {
   width: 8px;
   height: 8px;
+
   border-radius: 50%;
-  background: #32e38a;
-  box-shadow: 0 0 10px rgba(50, 227, 138, 0.8);
+
+  background: #22c55e;
+
+  box-shadow: 0 0 10px #22c55e;
 }
+
+
+/* =========================================
+   MAIN DASHBOARD
+   ========================================= */
 
 .dashboard {
-  padding: 42px;
+  max-width: 1500px;
+  margin: auto;
+  padding: 36px 38px 60px;
 }
 
-.welcome-panel {
-  max-width: 900px;
-  padding: 42px;
-  border: 1px solid #26313d;
-  border-radius: 14px;
-  background: rgba(15, 21, 29, 0.82);
+
+/* =========================================
+   HERO
+   ========================================= */
+
+.hero-section {
+  min-height: 190px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 30px;
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+
+  border-radius: 20px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(124, 58, 237, 0.16),
+      rgba(37, 99, 235, 0.05),
+      rgba(255, 255, 255, 0.015)
+    );
+
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.05);
 }
 
 .eyebrow {
-  margin: 0 0 14px;
-  color: #36d9ff;
-  font-size: 10px;
+  color: #a78bfa;
+  font-size: 11px;
   letter-spacing: 2px;
-}
-
-.welcome-panel h2 {
-  margin: 0;
-  font-size: 42px;
   font-weight: 600;
+  margin-bottom: 10px;
 }
 
-.welcome-panel > p:not(.eyebrow) {
-  color: #8e9baa;
-  font-size: 15px;
+.hero-section h2 {
+  font-size: 38px;
+  letter-spacing: -1px;
+}
+
+.hero-section h2 span {
+  color: #a78bfa;
+}
+
+.hero-description {
+  max-width: 650px;
   margin-top: 12px;
+
+  color: #9ca3af;
+
+  line-height: 1.6;
+
+  font-size: 14px;
 }
 
-.ready-message {
-  margin-top: 30px;
-  display: inline-flex;
+.mission-status {
+  padding: 13px 17px;
+
+  display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  border: 1px solid #263b33;
-  border-radius: 8px;
-  color: #b8d8c8;
-  background: rgba(35, 120, 75, 0.08);
+  gap: 9px;
+
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.04);
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+
+  color: #cbd5e1;
+
   font-size: 12px;
+}
+
+
+/* =========================================
+   STAT CARDS
+   ========================================= */
+
+.dashboard-grid {
+  display: grid;
+
+  grid-template-columns: repeat(4, 1fr);
+
+  gap: 16px;
+
+  margin-top: 18px;
+}
+
+.dashboard-card {
+  min-height: 130px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 16px;
+
+  padding: 22px;
+
+  border-radius: 16px;
+
+  border: 1px solid rgba(255, 255, 255, 0.07);
+
+  background: rgba(255, 255, 255, 0.025);
+
+  transition: 0.25s;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-2px);
+
+  background: rgba(255, 255, 255, 0.045);
+
+  border-color: rgba(124, 58, 237, 0.3);
+}
+
+.card-icon {
+  width: 48px;
+  height: 48px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 13px;
+
+  background: rgba(124, 58, 237, 0.13);
+
+  font-size: 22px;
+}
+
+.dashboard-card p {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #7f899b;
+}
+
+.dashboard-card h3 {
+  font-size: 26px;
+  margin: 5px 0;
+}
+
+.dashboard-card span {
+  color: #697386;
+  font-size: 11px;
+}
+
+
+/* =========================================
+   OPERATION AREA
+   ========================================= */
+
+.operation-grid {
+  display: grid;
+
+  grid-template-columns: 2fr 1fr;
+
+  gap: 18px;
+
+  margin-top: 18px;
+}
+
+.map-panel,
+.actions-panel {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+
+  border-radius: 18px;
+
+  background: rgba(255, 255, 255, 0.025);
+
+  overflow: hidden;
+}
+
+.panel-header {
+  min-height: 76px;
+
+  padding: 18px 22px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.panel-header p {
+  font-size: 10px;
+
+  letter-spacing: 1.5px;
+
+  color: #7f899b;
+}
+
+.panel-header h3 {
+  font-size: 17px;
+
+  margin-top: 5px;
+}
+
+.map-status {
+  font-size: 10px;
+
+  color: #94a3b8;
+
+  letter-spacing: 1px;
+}
+
+
+/* =========================================
+   MAP PLACEHOLDER
+   ========================================= */
+
+.map-placeholder {
+  height: 390px;
+
+  position: relative;
+
+  overflow: hidden;
+
+  background:
+    linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px),
+    #080e18;
+
+  background-size: 42px 42px;
+}
+
+.map-placeholder::before {
+  content: "";
+
+  position: absolute;
+
+  width: 400px;
+  height: 400px;
+
+  border-radius: 50%;
+
+  border: 1px solid rgba(124, 58, 237, 0.2);
+
+  left: 50%;
+  top: 50%;
+
+  transform: translate(-50%, -50%);
+}
+
+.map-placeholder::after {
+  content: "";
+
+  position: absolute;
+
+  width: 250px;
+  height: 250px;
+
+  border-radius: 50%;
+
+  border: 1px dashed rgba(37, 99, 235, 0.25);
+
+  left: 50%;
+  top: 50%;
+
+  transform: translate(-50%, -50%);
+}
+
+.map-message {
+  position: absolute;
+
+  left: 50%;
+  top: 50%;
+
+  transform: translate(-50%, -50%);
+
+  text-align: center;
+
+  z-index: 2;
+
+  width: 300px;
+}
+
+.map-pin {
+  font-size: 35px;
+
+  color: #a78bfa;
+
+  margin-bottom: 10px;
+}
+
+.map-message h3 {
+  font-size: 18px;
+}
+
+.map-message p {
+  color: #6f7a8e;
+
+  font-size: 12px;
+
+  line-height: 1.5;
+
+  margin-top: 8px;
+}
+
+
+/* =========================================
+   LIVE ACTIONS
+   ========================================= */
+
+.actions-panel {
+  min-height: 466px;
+}
+
+.action-item {
+  display: flex;
+
+  gap: 13px;
+
+  padding: 20px 22px;
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.action-indicator {
+  width: 8px;
+  height: 8px;
+
+  margin-top: 5px;
+
+  border-radius: 50%;
+
+  background: #22c55e;
+
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+
+  flex-shrink: 0;
+}
+
+.action-indicator.waiting {
+  background: #f59e0b;
+
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+}
+
+.action-item strong {
+  display: block;
+
+  font-size: 13px;
+
+  font-weight: 500;
+}
+
+.action-item p {
+  color: #697386;
+
+  font-size: 11px;
+
+  margin-top: 5px;
+
+  line-height: 1.4;
+}
+
+
+/* =========================================
+   RESPONSIVE
+   ========================================= */
+
+@media (max-width: 1100px) {
+
+  .navigation {
+    display: none;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .operation-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+@media (max-width: 650px) {
+
+  .topbar {
+    padding: 0 18px;
+  }
+
+  .dashboard {
+    padding: 20px 16px;
+  }
+
+  .hero-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+
+  .hero-section h2 {
+    font-size: 28px;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+}
+.navigation a {
+  text-decoration: none;
+}
+
+.navigation a:visited {
+  color: inherit;
+}
+
+.navigation a.active {
+  color: white;
+  background: rgba(124, 58, 237, 0.18);
+  border: 1px solid rgba(124, 58, 237, 0.3);
 }
