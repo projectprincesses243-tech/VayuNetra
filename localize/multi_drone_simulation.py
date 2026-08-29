@@ -6,7 +6,8 @@ from .dead_reckoning import DeadReckoner
 
 
 # ==========================================================
-# VAYUNETRA MULTI-DRONE LOCALIZATION BENCHMARK
+# VAYUNETRA MULTI-DRONE LOCALIZATION
+# TURNING / CURVED TRAJECTORY BENCHMARK
 # ==========================================================
 
 ENVIRONMENT_SIZE = 500.0
@@ -23,7 +24,7 @@ ALPHA = 0.35
 
 
 # ==========================================================
-# SENSOR / SIMULATION SETTINGS
+# SENSOR SETTINGS
 # ==========================================================
 
 RANGE_NOISE_STD = 1.0
@@ -64,10 +65,10 @@ INITIAL_POSITIONS = np.array([
 
 
 # ==========================================================
-# DRONE VELOCITIES
+# BASE VELOCITIES
 # ==========================================================
 
-VELOCITIES = np.array([
+BASE_VELOCITIES = np.array([
     [1.0, 0.5],
     [0.8, -0.6],
     [-0.7, 0.9],
@@ -94,34 +95,60 @@ def create_drones():
         drone = {
             "id": i + 1,
 
-            # Ground-truth position
+            # Ground truth position
             "position": initial_position.copy(),
 
-            # True velocity
-            "velocity": VELOCITIES[i].copy(),
+            # Current true velocity
+            "velocity": BASE_VELOCITIES[i].copy(),
 
             # Independent dead-reckoning estimate
             "dead_reckoning_position":
                 initial_position.copy(),
 
-            # Dead reckoner
+            # Dead reckoner object
             "dead_reckoner": DeadReckoner(
                 initial_position=initial_position
             ),
 
-            # Initial belief
+            # Localization result
             "belief_pos": initial_position.copy(),
 
-            # Initial uncertainty
+            # Uncertainty
             "uncertainty": 0.0,
 
-            # Simulated sensor ranges
+            # Simulated ranges
             "simulated_ranges": None
         }
 
         drones.append(drone)
 
     return drones
+
+
+# ==========================================================
+# TURNING / CURVED MOTION
+# ==========================================================
+
+def update_velocity(drone_index, step):
+
+    base_velocity = BASE_VELOCITIES[drone_index]
+
+    # Different turning rates for different drones.
+    turn_rate = 0.015 + (
+        drone_index * 0.002
+    )
+
+    # Slowly change heading as simulation progresses.
+    angle = turn_rate * step
+
+    rotation = np.array([
+        [np.cos(angle), -np.sin(angle)],
+        [np.sin(angle),  np.cos(angle)]
+    ])
+
+    velocity = rotation @ base_velocity
+
+    return velocity
 
 
 # ==========================================================
@@ -156,13 +183,14 @@ def simulate_ranges(drone, anchors, rng):
             true_position - anchor
         )
 
-        # Individual range failure
+        # Random range failure
         if rng.random() < RANGE_FAILURE_PROBABILITY:
 
             ranges.append(np.nan)
 
             continue
 
+        # Gaussian range noise
         noisy_range = (
             true_range
             + rng.normal(
@@ -182,34 +210,24 @@ def simulate_ranges(drone, anchors, rng):
 
 
 # ==========================================================
-# CLEAN FAILED RANGES
+# CLEAN RANGE MEASUREMENTS
 # ==========================================================
 
-def clean_ranges(ranges, anchors):
+def clean_ranges(ranges):
 
     if ranges is None:
         return None
 
-    valid_ranges = []
-    valid_anchors = []
-
-    for anchor, distance in zip(
-        anchors,
-        ranges
-    ):
-
-        if np.isfinite(distance):
-
-            valid_anchors.append(anchor)
-            valid_ranges.append(distance)
+    valid_ranges = [
+        value
+        for value in ranges
+        if np.isfinite(value)
+    ]
 
     if len(valid_ranges) < 3:
         return None
 
-    return (
-        np.asarray(valid_anchors, dtype=float),
-        np.asarray(valid_ranges, dtype=float)
-    )
+    return valid_ranges
 
 
 # ==========================================================
@@ -236,7 +254,7 @@ def run_experiment(ranging_on):
 
     trajectory_estimated = []
 
-    for step in range(NUM_STEPS):
+    for step in range(1, NUM_STEPS + 1):
 
         step_errors = []
 
@@ -247,7 +265,16 @@ def run_experiment(ranging_on):
         for i, drone in enumerate(drones):
 
             # ------------------------------------------------
-            # 1. UPDATE TRUE POSITION
+            # 1. UPDATE TRUE VELOCITY
+            # ------------------------------------------------
+
+            drone["velocity"] = update_velocity(
+                i,
+                step
+            )
+
+            # ------------------------------------------------
+            # 2. UPDATE TRUE POSITION
             # ------------------------------------------------
 
             drone["position"] = (
@@ -258,7 +285,7 @@ def run_experiment(ranging_on):
             keep_inside_environment(drone)
 
             # ------------------------------------------------
-            # 2. UPDATE DEAD RECKONING
+            # 3. UPDATE DEAD RECKONING
             # ------------------------------------------------
 
             measured_velocity = (
@@ -276,40 +303,35 @@ def run_experiment(ranging_on):
             )
 
             # ------------------------------------------------
-            # 3. RANGE MEASUREMENTS
+            # 4. RANGE MEASUREMENTS
             # ------------------------------------------------
 
             if ranging_on:
 
-                raw_ranges = simulate_ranges(
+                ranges = simulate_ranges(
                     drone,
                     ANCHORS,
                     rng
                 )
 
-                cleaned = clean_ranges(
-                    raw_ranges,
-                    ANCHORS
+                cleaned_ranges = clean_ranges(
+                    ranges
                 )
 
-                if cleaned is None:
+                if cleaned_ranges is None:
 
                     drone["simulated_ranges"] = None
 
                 else:
 
-                    valid_anchors, valid_ranges = cleaned
-
-                    # Store the complete range set.
-                    # NaN values represent failed measurements.
-                    drone["simulated_ranges"] = raw_ranges
+                    drone["simulated_ranges"] = ranges
 
             else:
 
                 drone["simulated_ranges"] = None
 
             # ------------------------------------------------
-            # 4. LOCALIZATION
+            # 5. LOCALIZATION
             # ------------------------------------------------
 
             estimated_position = localizers[i].update(
@@ -319,10 +341,12 @@ def run_experiment(ranging_on):
             )
 
             # ------------------------------------------------
-            # 5. ERROR
+            # 6. ERROR
             # ------------------------------------------------
 
-            error = localizers[i].error(drone)
+            error = localizers[i].error(
+                drone
+            )
 
             if error is not None:
 
@@ -337,14 +361,12 @@ def run_experiment(ranging_on):
             )
 
         # ----------------------------------------------------
-        # SAVE HISTORY
+        # SAVE STEP DATA
         # ----------------------------------------------------
 
-        if step_errors:
-
-            error_history.append(
-                np.asarray(step_errors)
-            )
+        error_history.append(
+            np.asarray(step_errors)
+        )
 
         trajectory_actual.append(
             np.asarray(actual_snapshot)
@@ -362,52 +384,6 @@ def run_experiment(ranging_on):
         ),
         "drones": drones
     }
-
-
-# ==========================================================
-# PRINT EXPERIMENT RESULTS
-# ==========================================================
-
-def print_results(
-    title,
-    results
-):
-
-    errors = results["errors"]
-
-    flat_errors = errors.flatten()
-
-    print()
-    print("----------------------------------------")
-    print(title)
-    print("----------------------------------------")
-
-    print(
-        "Average localization error:",
-        round(
-            float(np.mean(flat_errors)),
-            3
-        ),
-        "m"
-    )
-
-    print(
-        "Maximum localization error:",
-        round(
-            float(np.max(flat_errors)),
-            3
-        ),
-        "m"
-    )
-
-    print(
-        "Minimum localization error:",
-        round(
-            float(np.min(flat_errors)),
-            3
-        ),
-        "m"
-    )
 
 
 # ==========================================================
@@ -459,7 +435,7 @@ def create_error_plot(
     )
 
     plt.title(
-        "VayuNetra Localization Error Comparison"
+        "VayuNetra Turning-Trajectory Error Comparison"
     )
 
     plt.legend()
@@ -469,7 +445,7 @@ def create_error_plot(
     plt.tight_layout()
 
     plt.savefig(
-        "localize/results_error_comparison.png",
+        "localize/results_turning_error_comparison.png",
         dpi=150
     )
 
@@ -499,7 +475,7 @@ def create_trajectory_plot(
         figsize=(10, 8)
     )
 
-    # Plot actual trajectory of Drone 1
+    # Drone 1 actual path
     plt.plot(
         actual[:, 0, 0],
         actual[:, 0, 1],
@@ -508,21 +484,21 @@ def create_trajectory_plot(
         label="Actual Drone 1"
     )
 
-    # Ranging OFF
+    # Dead-reckoning path
     plt.plot(
         off_estimated[:, 0, 0],
         off_estimated[:, 0, 1],
         label="Estimated - Ranging OFF"
     )
 
-    # Ranging ON
+    # Localization path
     plt.plot(
         on_estimated[:, 0, 0],
         on_estimated[:, 0, 1],
         label="Estimated - Ranging ON"
     )
 
-    # Anchors
+    # Anchor locations
     plt.scatter(
         ANCHORS[:, 0],
         ANCHORS[:, 1],
@@ -540,7 +516,7 @@ def create_trajectory_plot(
     )
 
     plt.title(
-        "VayuNetra Drone Localization Trajectory"
+        "VayuNetra Turning Drone Trajectory"
     )
 
     plt.xlim(
@@ -560,7 +536,7 @@ def create_trajectory_plot(
     plt.tight_layout()
 
     plt.savefig(
-        "localize/results_trajectory_comparison.png",
+        "localize/results_turning_trajectory_comparison.png",
         dpi=150
     )
 
@@ -568,13 +544,17 @@ def create_trajectory_plot(
 
 
 # ==========================================================
-# MAIN BENCHMARK
+# MAIN SIMULATION
 # ==========================================================
 
 def run_simulation():
 
     print()
-    print("VAYUNETRA LOCALIZATION BENCHMARK")
+    print(
+        "VAYUNETRA TURNING-TRAJECTORY "
+        "LOCALIZATION BENCHMARK"
+    )
+
     print("----------------------------------------")
 
     print(
@@ -605,12 +585,16 @@ def run_simulation():
         f"{RANGE_FAILURE_PROBABILITY * 100:.1f}%"
     )
 
+    print()
+
     # ======================================================
     # RANGING OFF
     # ======================================================
 
-    print()
-    print("Running RANGING OFF experiment...")
+    print(
+        "Running RANGING OFF "
+        "turning experiment..."
+    )
 
     off_results = run_experiment(
         ranging_on=False
@@ -621,7 +605,8 @@ def run_simulation():
     # ======================================================
 
     print(
-        "Running RANGING ON experiment..."
+        "Running RANGING ON "
+        "turning experiment..."
     )
 
     on_results = run_experiment(
@@ -632,30 +617,28 @@ def run_simulation():
     # RESULTS
     # ======================================================
 
-    print_results(
-        "RANGING OFF",
-        off_results
+    off_errors = (
+        off_results["errors"].flatten()
     )
 
-    print_results(
-        "RANGING ON",
-        on_results
+    on_errors = (
+        on_results["errors"].flatten()
     )
-
-    # ======================================================
-    # COMPARISON
-    # ======================================================
 
     off_average = float(
-        np.mean(
-            off_results["errors"]
-        )
+        np.mean(off_errors)
     )
 
     on_average = float(
-        np.mean(
-            on_results["errors"]
-        )
+        np.mean(on_errors)
+    )
+
+    off_maximum = float(
+        np.max(off_errors)
+    )
+
+    on_maximum = float(
+        np.max(on_errors)
     )
 
     improvement = (
@@ -664,9 +647,43 @@ def run_simulation():
         * 100.0
     )
 
+    # ======================================================
+    # PRINT RESULTS
+    # ======================================================
+
     print()
     print("----------------------------------------")
-    print("FINAL COMPARISON")
+    print("RANGING OFF")
+    print("----------------------------------------")
+
+    print(
+        f"Average localization error: "
+        f"{off_average:.3f} m"
+    )
+
+    print(
+        f"Maximum localization error: "
+        f"{off_maximum:.3f} m"
+    )
+
+    print()
+    print("----------------------------------------")
+    print("RANGING ON")
+    print("----------------------------------------")
+
+    print(
+        f"Average localization error: "
+        f"{on_average:.3f} m"
+    )
+
+    print(
+        f"Maximum localization error: "
+        f"{on_maximum:.3f} m"
+    )
+
+    print()
+    print("----------------------------------------")
+    print("TURNING-TRAJECTORY COMPARISON")
     print("----------------------------------------")
 
     print(
@@ -700,19 +717,21 @@ def run_simulation():
 
     print()
     print("----------------------------------------")
-    print("PLOTS SAVED")
+    print("TURNING-TRAJECTORY PLOTS SAVED")
     print("----------------------------------------")
 
     print(
-        "localize/results_error_comparison.png"
+        "localize/"
+        "results_turning_error_comparison.png"
     )
 
     print(
-        "localize/results_trajectory_comparison.png"
+        "localize/"
+        "results_turning_trajectory_comparison.png"
     )
 
     # ======================================================
-    # FINAL DRONE POSITIONS — RANGING ON
+    # FINAL POSITIONS
     # ======================================================
 
     print()
