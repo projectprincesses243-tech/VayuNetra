@@ -1,34 +1,48 @@
 import numpy as np
 
-# 2D dead reckoning with drift
 
-actual_x = 0.0
-actual_y = 0.0
+class DeadReckoner:
+    """
+    Simple 2D dead-reckoning model.
 
-estimated_x = 0.0
-estimated_y = 0.0
+    The position is updated using the supplied velocity
+    and time step.
+    """
 
-# Simulate 10 movements
-for step in range(1, 11):
+    def __init__(self, initial_position=(0.0, 0.0)):
+        self.position = np.asarray(initial_position, dtype=float)
 
-    # Actual drone movement
-    actual_x = actual_x + 1.0
-    actual_y = actual_y + 0.5
+    def update(self, velocity=(0.0, 0.0), dt=1.0):
+        velocity = np.asarray(velocity, dtype=float)
 
-    # Estimated movement has a small error
-    estimated_x = estimated_x + 1.05
-    estimated_y = estimated_y + 0.52
+        self.position = self.position + velocity * dt
 
-    # Calculate position error
-    error_x = estimated_x - actual_x
-    error_y = estimated_y - actual_y
+        return self.position.copy()
 
-    # Calculate total distance error
-    position_error = np.sqrt(error_x**2 + error_y**2)
 
-    print(
-        "Step:", step,
-        "| Actual:", (round(actual_x, 2), round(actual_y, 2)),
-        "| Estimated:", (round(estimated_x, 2), round(estimated_y, 2)),
-        "| Position error:", round(position_error, 3), "m"
-    )
+if __name__ == "__main__":
+
+    reckoner = DeadReckoner()
+
+    print("DEAD RECKONING TEST")
+    print("----------------------------------------")
+
+    for step in range(1, 11):
+
+        position = reckoner.update(
+            velocity=(1.05, 0.52)
+        )
+
+        actual_position = np.array([
+            float(step),
+            float(step) * 0.5
+        ])
+
+        error = np.linalg.norm(position - actual_position)
+
+        print(
+            f"Step: {step} | "
+            f"Actual: {np.round(actual_position, 3)} | "
+            f"Estimated: {np.round(position, 3)} | "
+            f"Position error: {error:.3f} m"
+        )
