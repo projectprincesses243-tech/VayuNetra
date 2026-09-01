@@ -21,17 +21,21 @@ class LocalizationBridge:
     'dead_reckoning_position' hook. Set to False once her fix lands.
     """
 
+    MAX_UNCERTAINTY = 60.0      # metres - keeps the dashboard circle sane
+
     def __init__(self, drones, anchors, ranging_on=True,
                  drift_shim=True, bias_std=0.15, walk_std=0.75,
                  alpha=0.10, seed=42):
-               # Vaishnavi's get_ranges expects plain coordinates, not dicts.
+        self.drones = drones
+        self.drift_shim = drift_shim
+        self.rng = np.random.default_rng(seed)
+
+        # Vaishnavi's get_ranges expects plain coordinates, not dicts.
         # Accept either format and normalise here.
         self.anchors = np.array(
             [a["position"] if isinstance(a, dict) else a for a in anchors],
             dtype=float,
         )
-        self.drift_shim = drift_shim
-        self.rng = np.random.default_rng(seed)
 
         self.localizers = {}
         self.dr_positions = {}
@@ -77,7 +81,13 @@ class LocalizationBridge:
         for drone, view in zip(self.drones, views):
             self.localizers[drone.drone_id].update(view, views, self.anchors)
             drone.belief_pos = list(np.asarray(view["belief_pos"], dtype=float))
-            drone.uncertainty = float(view.get("uncertainty", 0.0))
+
+            # Cap uncertainty. Without this it grows without bound and the
+            # dashboard circle eventually covers the whole map.
+            drone.uncertainty = min(
+                float(view.get("uncertainty", 0.0)),
+                self.MAX_UNCERTAINTY,
+            )
 
     def error(self, drone):
         """True position error in metres. Analytics only - drones never see this."""

@@ -39,6 +39,7 @@ class Mission:
         self.net = ContractNet(settle_ticks=4)
         self.tasks = {}
         self.visited = set()
+        self.complete = False
 
         BUS.subscribe("SURVIVOR_DETECTED", self.on_detection)
 
@@ -89,64 +90,70 @@ class Mission:
     def coverage(self):
         return 100.0 * len(self.visited) / ((SIZE // 25) ** 2)
 
-    def run(self, ticks=400, kill_at=None, kill_id=None):
-        BUS.publish("MISSION_STARTED", {})
-        for tick in range(ticks):
-            BUS.tick = tick
+    def step(self, tick, kill_at=None, kill_id=None):
+        """One simulation tick. Returns the kill_id used, so callers can track it."""
+        BUS.tick = tick
 
-            # ----- scheduled drone failure -----
-            if kill_at and tick == kill_at:
-                # If no specific drone was named, target one that is actually
-                # carrying a task - otherwise nothing gets re-auctioned and
-                # the resilience demo does not fire.
-                if kill_id is None:
-                    busy = [d for d in self.drones
-                            if d.alive and d.assigned_task and d.state == "ENROUTE"]
-                    if not busy:
-                        print(f"  [t{tick}] no drone en route, skipping kill")
-                        kill_at = None
-                        continue
+        # ----- scheduled drone failure -----
+        if kill_at and tick == kill_at:
+            if kill_id is None:
+                busy = [d for d in self.drones
+                        if d.alive and d.assigned_task and d.state == "ENROUTE"]
+                if busy:
                     kill_id = busy[0].drone_id
-
+            if kill_id is not None:
                 released = self.fsm.kill(kill_id)
                 print(f"  [t{tick}] drone {kill_id} lost, released {released}")
                 if released:
                     self.net.issue_cfp(self.tasks[released])
 
-            for d in self.drones:
-                if not d.alive:
-                    continue
-                self.move(d)
-                self.perceive(d)
-                self.fsm.check_battery(d)
+        for d in self.drones:
+            if not d.alive:
+                continue
+            self.move(d)
+            self.perceive(d)
+            self.fsm.check_battery(d)
 
-            self.bridge.update()
+        self.bridge.update()
 
-            alive = [d for d in self.drones if d.alive]
-            self.net.collect_bids(alive)
-            for task_id, winner, cost in self.net.resolve():
-                w = next(d for d in self.drones if d.drone_id == winner)
-                w.assigned_task = task_id
-                self.tasks[task_id]["status"] = "ASSIGNED"
-                self.fsm.transition(w, "ENROUTE", "won auction")
-                print(f"  [t{tick}] {task_id} -> drone {winner} (cost {cost:.0f})")
+        alive = [d for d in self.drones if d.alive]
+        self.net.collect_bids(alive)
+        for task_id, winner, cost in self.net.resolve():
+            w = next(d for d in self.drones if d.drone_id == winner)
+            w.assigned_task = task_id
+            self.tasks[task_id]["status"] = "ASSIGNED"
+            self.fsm.transition(w, "ENROUTE", "won auction")
+            print(f"  [t{tick}] {task_id} -> drone {winner} (cost {cost:.0f})")
 
-            for d in self.drones:
-                if d.state == "ENROUTE" and d.assigned_task:
-                    if math.dist(d.position, self.tasks[d.assigned_task]["location"]) < 15:
-                        sid = int(d.assigned_task[1:])
-                        self.survivors[sid]["rescued"] = True
-                        self.tasks[d.assigned_task]["status"] = "DONE"
-                        BUS.publish("TASK_COMPLETED", {"task_id": d.assigned_task})
-                        print(f"  [t{tick}] {d.assigned_task} rescued by drone {d.drone_id}")
-                        d.assigned_task = None
-                        self.fsm.transition(d, "SEARCHING", "rescue complete")
+        for d in self.drones:
+            if d.state == "ENROUTE" and d.assigned_task:
+                if math.dist(d.position, self.tasks[d.assigned_task]["location"]) < 15:
+                    sid = int(d.assigned_task[1:])
+                    self.survivors[sid]["rescued"] = True
+                    self.tasks[d.assigned_task]["status"] = "DONE"
+                    BUS.publish("TASK_COMPLETED", {"task_id": d.assigned_task})
+                    print(f"  [t{tick}] {d.assigned_task} rescued by drone {d.drone_id}")
+                    d.assigned_task = None
+                    self.fsm.transition(d, "SEARCHING", "rescue complete")
 
-            if all(s["rescued"] for s in self.survivors):
+        if all(s["rescued"] for s in self.survivors):
+            self.complete = True
+
+        return kill_id
+
+    def run(self, ticks=400, kill_at=None, kill_id=None):
+        BUS.publish("MISSION_STARTED", {})
+        for tick in range(ticks):
+            kill_id = self.step(tick, kill_at, kill_id)
+            if kill_at and tick == kill_at:
+                kill_at = None
+            if self.complete:
                 BUS.publish("MISSION_COMPLETE", {"tick": tick})
                 print(f"\n  MISSION COMPLETE at tick {tick}")
                 break
+        return self.results()
 
+    def results(self):
         return {
             "ticks": BUS.tick,
             "coverage": round(self.coverage(), 1),
@@ -156,6 +163,42 @@ class Mission:
             "auctions": BUS.count("TASK_AWARDED"),
             "bids": BUS.count("BID_PLACED"),
             "lost": BUS.count("DRONE_DIED"),
+        }
+
+    def snapshot(self):
+        """Complete system state as JSON for the dashboard. Read-only."""
+        return {
+            "tick": BUS.tick,
+            "complete": self.complete,
+            "world": {"size": SIZE, "anchors": ANCHORS},
+            "ranging_on": self.bridge.localizers[self.drones[0].drone_id].ranging_on,
+            "drones": [{
+                "id": d.drone_id,
+                "true_pos": [round(d.position[0], 1), round(d.position[1], 1)],
+                "belief_pos": [round(d.belief_pos[0], 1), round(d.belief_pos[1], 1)],
+                "error": round(self.bridge.error(d), 2),
+                "uncertainty": round(d.uncertainty, 2),
+                "battery": round(d.battery, 1),
+                "state": d.state,
+                "alive": d.alive,
+                "assigned_task": d.assigned_task,
+            } for d in self.drones],
+            "survivors": [{
+                "id": s["id"],
+                "pos": [round(s["pos"][0], 1), round(s["pos"][1], 1)],
+                "found": s["found"],
+                "rescued": s["rescued"],
+            } for s in self.survivors],
+            "tasks": list(self.tasks.values()),
+            "open_auctions": [{
+                "task_id": tid,
+                "age": c["age"],
+                "bids": [{"drone_id": k, "cost": round(v, 1)}
+                         for k, v in sorted(c["bids"].items(), key=lambda kv: kv[1])
+                         if v != float("inf")],
+            } for tid, c in self.net.open_calls.items()],
+            "metrics": self.results(),
+            "events": BUS.recent(25),
         }
 
 
