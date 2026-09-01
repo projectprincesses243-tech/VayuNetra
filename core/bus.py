@@ -35,6 +35,19 @@ class EventBus:
         """How many times this event fired. Analytics uses this."""
         return sum(1 for e in self.log if e["event"] == event_name)
 
+    def reset(self):
+        """
+        Wipe all state between experiment runs.
+
+        Must clear subscribers too - a new Mission re-subscribes on creation,
+        so without this each run would fire every previous run's handlers.
+        Mutates in place rather than rebinding, so modules that already
+        imported BUS keep pointing at the same live object.
+        """
+        self._subscribers.clear()
+        self.log.clear()
+        self.tick = 0
+
 
 # One shared instance for the whole program.
 # Every module does:  from core.bus import BUS

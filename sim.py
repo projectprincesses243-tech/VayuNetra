@@ -12,6 +12,9 @@ from integration.adapters import LocalizationBridge
 
 ANCHORS = [[0.0, 0.0], [500.0, 0.0], [250.0, 500.0], [0.0, 500.0]]
 SIZE = 500.0
+CELL = 50.0                      # search cell size in metres
+DETECT_RADIUS = 40.0
+RESCUE_RADIUS = 20.0
 
 
 class Mission:
@@ -27,6 +30,7 @@ class Mission:
             d.state = "SEARCHING"
             d.assigned_task = None
             d.uncertainty = 0.0
+            d.search_target = None
             self.drones.append(d)
 
         self.survivors = [{"id": i,
@@ -38,11 +42,20 @@ class Mission:
         self.fsm = MissionFSM(self.drones)
         self.net = ContractNet(settle_ticks=4)
         self.tasks = {}
-        self.visited = set()
         self.complete = False
+
+        # ---- distributed search state ----
+        # Every cell centre that still needs sweeping.
+        n_cells = int(SIZE // CELL)
+        self.unsearched = {(cx, cy)
+                           for cx in range(n_cells)
+                           for cy in range(n_cells)}
+        self.total_cells = len(self.unsearched)
+        self.claimed = {}            # cell -> drone_id
 
         BUS.subscribe("SURVIVOR_DETECTED", self.on_detection)
 
+    # ------------------------------------------------------------------
     def on_detection(self, p):
         tid = f"T{p['survivor_id']:03d}"
         if tid in self.tasks:
@@ -51,36 +64,69 @@ class Mission:
         self.tasks[tid] = task
         self.net.issue_cfp(task)
 
-    def move(self, d):
-        """Fly toward target if assigned, else wander."""
-        if d.assigned_task and d.assigned_task in self.tasks:
-            tx, ty = self.tasks[d.assigned_task]["location"]
-        else:
-            tx = ty = None
+    def cell_centre(self, cell):
+        return [cell[0] * CELL + CELL / 2, cell[1] * CELL + CELL / 2]
 
-        if tx is None:
-            if random.random() < 0.1 or d.velocity == [0.0, 0.0]:
-                a = random.uniform(0, 6.283)
-                d.velocity = [math.cos(a) * 3.0, math.sin(a) * 3.0]
+    def claim_cell(self, drone):
+        """
+        Each drone picks its own next search cell, using its own belief
+        position and skipping cells another drone has already claimed.
+        No allocator - this is the same local-decision principle as the auction.
+        """
+        available = [c for c in self.unsearched if c not in self.claimed]
+        if not available:
+            self.claimed = {k: v for k, v in self.claimed.items()
+                            if v == drone.drone_id}
+            available = [c for c in self.unsearched if c not in self.claimed]
+            if not available:
+                return None
+        bx, by = drone.belief_pos
+        best = min(available, key=lambda c: math.dist(self.cell_centre(c), (bx, by)))
+        self.claimed[best] = drone.drone_id
+        return best
+
+    def release_claims(self, drone_id):
+        self.claimed = {k: v for k, v in self.claimed.items() if v != drone_id}
+
+    # ------------------------------------------------------------------
+    def move(self, d):
+        """Fly to an assigned survivor, otherwise sweep the next search cell."""
+        if d.assigned_task and d.assigned_task in self.tasks:
+            target = self.tasks[d.assigned_task]["location"]
         else:
-            # navigate using BELIEF, not truth - this is the honest bit
-            bx, by = d.belief_pos
-            dx, dy = tx - bx, ty - by
-            dist = math.hypot(dx, dy) or 1.0
-            speed = min(3.0, dist)
-            d.velocity = [dx / dist * speed, dy / dist * speed]
+            if d.search_target is None or d.search_target not in self.unsearched:
+                d.search_target = self.claim_cell(d)
+            target = self.cell_centre(d.search_target) if d.search_target else None
+
+        if target is None:
+            d.velocity = [0.0, 0.0]
+            return
+
+        # navigate using BELIEF, not truth - this is the honest bit
+        bx, by = d.belief_pos
+        dx, dy = target[0] - bx, target[1] - by
+        dist = math.hypot(dx, dy) or 1.0
+        speed = min(3.0, dist)
+        d.velocity = [dx / dist * speed, dy / dist * speed]
 
         d.position = [max(0, min(SIZE, d.position[0] + d.velocity[0])),
                       max(0, min(SIZE, d.position[1] + d.velocity[1]))]
         d.battery -= 0.08
-        self.visited.add((int(d.position[0]) // 25, int(d.position[1]) // 25))
+
+        # A cell counts as searched when the drone believes it has arrived.
+        # Belief, not truth - so bad localization means cells get "searched"
+        # that were never actually visited.
+        if d.search_target and math.dist((bx, by), target) < CELL / 2:
+            self.unsearched.discard(d.search_target)
+            self.claimed.pop(d.search_target, None)
+            d.search_target = None
 
     def perceive(self, d):
         """MOCK perception. Replaced by Tejaswini's YOLO at the hackathon."""
         for s in self.survivors:
             if s["found"]:
                 continue
-            if math.dist(d.position, s["pos"]) < 40:
+            if math.dist(d.position, s["pos"]) < DETECT_RADIUS:
                 s["found"] = True
                 BUS.publish("SURVIVOR_DETECTED", {
                     "drone_id": d.drone_id, "survivor_id": s["id"],
@@ -88,13 +134,12 @@ class Mission:
                     "confidence": round(random.uniform(0.72, 0.95), 2)})
 
     def coverage(self):
-        return 100.0 * len(self.visited) / ((SIZE // 25) ** 2)
+        return 100.0 * (self.total_cells - len(self.unsearched)) / self.total_cells
 
+    # ------------------------------------------------------------------
     def step(self, tick, kill_at=None, kill_id=None):
-        """One simulation tick. Returns the kill_id used, so callers can track it."""
         BUS.tick = tick
 
-        # ----- scheduled drone failure -----
         if kill_at and tick == kill_at:
             if kill_id is None:
                 busy = [d for d in self.drones
@@ -103,6 +148,7 @@ class Mission:
                     kill_id = busy[0].drone_id
             if kill_id is not None:
                 released = self.fsm.kill(kill_id)
+                self.release_claims(kill_id)
                 print(f"  [t{tick}] drone {kill_id} lost, released {released}")
                 if released:
                     self.net.issue_cfp(self.tasks[released])
@@ -127,7 +173,7 @@ class Mission:
 
         for d in self.drones:
             if d.state == "ENROUTE" and d.assigned_task:
-                if math.dist(d.position, self.tasks[d.assigned_task]["location"]) < 15:
+                if math.dist(d.position, self.tasks[d.assigned_task]["location"]) < RESCUE_RADIUS:
                     sid = int(d.assigned_task[1:])
                     self.survivors[sid]["rescued"] = True
                     self.tasks[d.assigned_task]["status"] = "DONE"
@@ -158,6 +204,7 @@ class Mission:
             "ticks": BUS.tick,
             "coverage": round(self.coverage(), 1),
             "rescued": sum(s["rescued"] for s in self.survivors),
+            "detected": sum(s["found"] for s in self.survivors),
             "total": len(self.survivors),
             "mean_error": round(self.bridge.mean_error(), 2),
             "auctions": BUS.count("TASK_AWARDED"),
@@ -170,8 +217,13 @@ class Mission:
         return {
             "tick": BUS.tick,
             "complete": self.complete,
-            "world": {"size": SIZE, "anchors": ANCHORS},
+            "world": {"size": SIZE, "anchors": ANCHORS, "cell": CELL},
             "ranging_on": self.bridge.localizers[self.drones[0].drone_id].ranging_on,
+            "searched_cells": [self.cell_centre(c)
+                               for c in ({(x, y)
+                                          for x in range(int(SIZE // CELL))
+                                          for y in range(int(SIZE // CELL))}
+                                         - self.unsearched)],
             "drones": [{
                 "id": d.drone_id,
                 "true_pos": [round(d.position[0], 1), round(d.position[1], 1)],
@@ -182,6 +234,7 @@ class Mission:
                 "state": d.state,
                 "alive": d.alive,
                 "assigned_task": d.assigned_task,
+                "search_target": self.cell_centre(d.search_target) if d.search_target else None,
             } for d in self.drones],
             "survivors": [{
                 "id": s["id"],
@@ -207,10 +260,12 @@ if __name__ == "__main__":
     ap.add_argument("--kill-at", type=int, default=None)
     ap.add_argument("--kill-id", type=int, default=None)
     ap.add_argument("--no-ranging", action="store_true")
+    ap.add_argument("--drones", type=int, default=6)
+    ap.add_argument("--ticks", type=int, default=400)
     a = ap.parse_args()
 
-    m = Mission(ranging_on=not a.no_ranging)
-    r = m.run(kill_at=a.kill_at, kill_id=a.kill_id)
+    m = Mission(n_drones=a.drones, ranging_on=not a.no_ranging)
+    r = m.run(ticks=a.ticks, kill_at=a.kill_at, kill_id=a.kill_id)
     print("\n  " + "-" * 40)
     for k, v in r.items():
         print(f"  {k:12} {v}")
