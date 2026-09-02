@@ -9,6 +9,7 @@ from core.contracts import make_task
 from mission.fsm import MissionFSM
 from mission.auction import ContractNet
 from integration.adapters import LocalizationBridge
+from integration.perception_adapter import PerceptionAdapter
 
 ANCHORS = [[0.0, 0.0], [500.0, 0.0], [250.0, 500.0], [0.0, 500.0]]
 SIZE = 500.0
@@ -41,6 +42,7 @@ class Mission:
         self.bridge = LocalizationBridge(self.drones, ANCHORS, ranging_on=ranging_on)
         self.fsm = MissionFSM(self.drones)
         self.net = ContractNet(settle_ticks=4)
+        self.perception = PerceptionAdapter(use_real=False, seed=seed)
         self.tasks = {}
         self.complete = False
 
@@ -122,17 +124,19 @@ class Mission:
             d.search_target = None
 
     def perceive(self, d):
-        """MOCK perception. Replaced by Tejaswini's YOLO at the hackathon."""
-        for s in self.survivors:
-            if s["found"]:
-                continue
-            if math.dist(d.position, s["pos"]) < DETECT_RADIUS:
-                s["found"] = True
-                BUS.publish("SURVIVOR_DETECTED", {
-                    "drone_id": d.drone_id, "survivor_id": s["id"],
-                    "location": list(s["pos"]),
-                    "confidence": round(random.uniform(0.72, 0.95), 2)})
-
+        """Perception via adapter. Mock today, real YOLO tomorrow."""
+        hit = self.perception.scan(d, self.survivors)
+        if hit is None:
+            return
+        self.survivors[hit["survivor_id"]]["found"] = True
+        BUS.publish("SURVIVOR_DETECTED", {
+            "drone_id": d.drone_id,
+            "survivor_id": hit["survivor_id"],
+            "location": hit["location"],
+            "confidence": hit["confidence"],
+            "frame": hit["frame"],
+            "boxes": hit["boxes"],
+        })
     def coverage(self):
         return 100.0 * (self.total_cells - len(self.unsearched)) / self.total_cells
 
