@@ -13,6 +13,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from sim import Mission
+from core.bus import BUS
 
 app = FastAPI(title="VayuNetra")
 
@@ -34,7 +35,7 @@ class SimRunner:
         self.tick = 0
         self.running = False
         self.speed = 0.1          # seconds per tick
-        self.pending_kill = None
+        self.kill_request = None  # None = nothing pending, -1 = auto, int = specific id
 
     def start(self):
         if self.running:
@@ -43,16 +44,50 @@ class SimRunner:
         threading.Thread(target=self._loop, daemon=True).start()
 
     def _loop(self):
-        while self.running and self.tick < 2000:
+        while self.running and self.tick < 5000:
             with self.lock:
-                kill_at = self.tick if self.pending_kill is not None else None
-                kill_id = self.pending_kill if self.pending_kill != -1 else None
-                self.mission.step(self.tick, kill_at, kill_id)
-                self.pending_kill = None
+                if self.kill_request is not None:
+                    self._do_kill(self.kill_request)
+                    self.kill_request = None
+                self.mission.step(self.tick)
                 self.tick += 1
                 if self.mission.complete:
                     self.running = False
             time.sleep(self.speed)
+
+    def _do_kill(self, requested_id):
+        """
+        Kill a drone. Called from inside the loop, holding the lock.
+
+        Preference order:
+          1. the specific drone asked for
+          2. a drone carrying a task  (best demo - triggers a re-auction)
+          3. any living drone         (still a valid failure demo)
+
+        Falling through to 3 matters: by the time a judge presses the button
+        the mission is often finished and nobody is en route. Returning 200
+        while killing nothing is worse than killing an idle drone.
+        """
+        m = self.mission
+
+        if requested_id is not None and requested_id >= 0:
+            target = next((d for d in m.drones
+                           if d.drone_id == requested_id and d.alive), None)
+        else:
+            target = next((d for d in m.drones
+                           if d.alive and d.assigned_task and d.state == "ENROUTE"), None)
+            if target is None:
+                target = next((d for d in m.drones if d.alive), None)
+
+        if target is None:
+            return None
+
+        released = m.fsm.kill(target.drone_id)
+        m.release_claims(target.drone_id)
+        if released and released in m.tasks:
+            m.tasks[released]["status"] = "OPEN"
+            m.net.issue_cfp(m.tasks[released])
+        return target.drone_id
 
     def snapshot(self):
         with self.lock:
@@ -61,18 +96,27 @@ class SimRunner:
     def reset(self, ranging_on=True):
         with self.lock:
             self.running = False
+        time.sleep(0.25)
+        with self.lock:
+            BUS.reset()
             self.mission = Mission(ranging_on=ranging_on)
             self.tick = 0
-        time.sleep(0.2)
         self.start()
 
     def set_ranging(self, on):
         with self.lock:
             self.mission.bridge.set_ranging(on)
 
-    def kill(self, drone_id=None):
+    def request_kill(self, drone_id=None):
         with self.lock:
-            self.pending_kill = -1 if drone_id is None else drone_id
+            alive = [d.drone_id for d in self.mission.drones if d.alive]
+            if not alive:
+                return {"killed": None, "reason": "no drones alive"}
+            self.kill_request = -1 if drone_id is None else drone_id
+            if not self.running:      # mission finished - apply immediately
+                self._do_kill(self.kill_request)
+                self.kill_request = None
+        return {"queued": True}
 
 
 RUNNER = SimRunner()
@@ -98,9 +142,11 @@ def ranging(on: bool):
 
 @app.post("/api/kill")
 def kill(drone_id: int = None):
-    """The K key. Omit drone_id to auto-target a drone that is en route."""
-    RUNNER.kill(drone_id)
-    return {"killed": drone_id if drone_id is not None else "auto"}
+    """
+    The K key. Omit drone_id to auto-target.
+    Takes effect on the next tick, so poll /api/state or watch the socket.
+    """
+    return RUNNER.request_kill(drone_id)
 
 
 @app.post("/api/reset")
