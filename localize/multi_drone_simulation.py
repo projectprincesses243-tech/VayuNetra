@@ -31,7 +31,12 @@ RANGE_NOISE_STD = 1.0
 
 RANGE_FAILURE_PROBABILITY = 0.05
 
+# Dead-reckoning systematic bias.
+# The actual error model is implemented inside DeadReckoner.
 DEAD_RECKONING_BIAS = 0.02
+
+# Random-walk noise used by DeadReckoner.
+DEAD_RECKONING_RANDOM_WALK_STD = 0.005
 
 RANDOM_SEED = 42
 
@@ -84,7 +89,7 @@ BASE_VELOCITIES = np.array([
 # CREATE DRONES
 # ==========================================================
 
-def create_drones():
+def create_drones(rng):
 
     drones = []
 
@@ -101,13 +106,16 @@ def create_drones():
             # Current true velocity
             "velocity": BASE_VELOCITIES[i].copy(),
 
-            # Independent dead-reckoning estimate
+            # Dead-reckoning estimate
             "dead_reckoning_position":
                 initial_position.copy(),
 
             # Dead reckoner object
             "dead_reckoner": DeadReckoner(
-                initial_position=initial_position
+                initial_position=initial_position,
+                bias=DEAD_RECKONING_BIAS,
+                random_walk_std=DEAD_RECKONING_RANDOM_WALK_STD,
+                rng=rng
             ),
 
             # Localization result
@@ -199,6 +207,7 @@ def simulate_ranges(drone, anchors, rng):
             )
         )
 
+        # Distance cannot be negative
         noisy_range = max(
             0.1,
             noisy_range
@@ -238,7 +247,7 @@ def run_experiment(ranging_on):
 
     rng = np.random.default_rng(RANDOM_SEED)
 
-    drones = create_drones()
+    drones = create_drones(rng)
 
     localizers = [
         Localizer(
@@ -288,18 +297,11 @@ def run_experiment(ranging_on):
             # 3. UPDATE DEAD RECKONING
             # ------------------------------------------------
 
-            measured_velocity = (
-                drone["velocity"]
-                * (1.0 + DEAD_RECKONING_BIAS)
-            )
-
             drone["dead_reckoning_position"] = (
-                drone["dead_reckoning_position"]
-                + measured_velocity * DT
-            )
-
-            drone["dead_reckoner"].position = (
-                drone["dead_reckoning_position"].copy()
+                drone["dead_reckoner"].update(
+                    velocity=drone["velocity"],
+                    dt=DT
+                )
             )
 
             # ------------------------------------------------
@@ -550,6 +552,7 @@ def create_trajectory_plot(
 def run_simulation():
 
     print()
+
     print(
         "VAYUNETRA TURNING-TRAJECTORY "
         "LOCALIZATION BENCHMARK"
@@ -583,6 +586,16 @@ def run_simulation():
     print(
         f"Range failure probability: "
         f"{RANGE_FAILURE_PROBABILITY * 100:.1f}%"
+    )
+
+    print(
+        f"Dead-reckoning bias: "
+        f"{DEAD_RECKONING_BIAS}"
+    )
+
+    print(
+        f"Dead-reckoning random-walk STD: "
+        f"{DEAD_RECKONING_RANDOM_WALK_STD}"
     )
 
     print()
@@ -652,6 +665,7 @@ def run_simulation():
     # ======================================================
 
     print()
+
     print("----------------------------------------")
     print("RANGING OFF")
     print("----------------------------------------")
@@ -667,6 +681,7 @@ def run_simulation():
     )
 
     print()
+
     print("----------------------------------------")
     print("RANGING ON")
     print("----------------------------------------")
@@ -682,6 +697,7 @@ def run_simulation():
     )
 
     print()
+
     print("----------------------------------------")
     print("TURNING-TRAJECTORY COMPARISON")
     print("----------------------------------------")
@@ -716,6 +732,7 @@ def run_simulation():
     )
 
     print()
+
     print("----------------------------------------")
     print("TURNING-TRAJECTORY PLOTS SAVED")
     print("----------------------------------------")
@@ -735,6 +752,7 @@ def run_simulation():
     # ======================================================
 
     print()
+
     print("----------------------------------------")
     print("FINAL RANGING-ON DRONE POSITIONS")
     print("----------------------------------------")
