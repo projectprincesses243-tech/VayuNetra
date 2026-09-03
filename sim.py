@@ -42,7 +42,7 @@ class Mission:
         self.bridge = LocalizationBridge(self.drones, ANCHORS, ranging_on=ranging_on)
         self.fsm = MissionFSM(self.drones)
         self.net = ContractNet(settle_ticks=4)
-        self.perception = PerceptionAdapter(use_real=False, seed=seed)
+        self.perception = PerceptionAdapter(seed=seed)
         self.tasks = {}
         self.complete = False
 
