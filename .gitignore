@@ -6,3 +6,7 @@ yolov8n.pt
 __pycache__/
 .venv/
 perception/frames/
+*.pt
+__pycache__/
+.venv/
+perception/frames/
