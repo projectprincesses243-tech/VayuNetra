@@ -312,16 +312,74 @@ export default function LiveMap() {
       : [];
 
 
+  const activeOperation =
+    JSON.parse(
+      localStorage.getItem(
+        "vayunetra_active_operation"
+      ) || "null"
+    );
+
+
+  const missionRunning =
+    Boolean(
+      activeOperation &&
+      activeOperation.status === "ACTIVE"
+    );
+
+
+  const deployment =
+    state?.deployment || {};
+
+
+  const recon =
+    deployment?.recon || {};
+
+
+  const mainSwarm =
+    deployment?.main_swarm || {};
+
+
+  const activeDroneIds = [
+    ...(recon.assessment_drone_ids || []),
+    ...(mainSwarm.assigned_drone_ids || [])
+  ].map((id) => {
+
+    const match =
+      String(id).match(/\d+/);
+
+    return match
+      ? Number(match[0])
+      : Number(id);
+
+  });
+
+
   // ===================================================
-  // IMPORTANT:
-  // ONLY ALIVE DRONES ARE SHOWN AS LIVE
+  // ONLY ACTIVE MISSION DRONES ARE SHOWN
   // ===================================================
 
   const drones =
-    allDrones.filter(
-      (drone) =>
-        drone.alive !== false
-    );
+    missionRunning
+
+      ? allDrones.filter(
+          (drone) => {
+
+            const droneId =
+              Number(
+                String(drone.id).match(/\d+/)?.[0]
+                ?? drone.id
+              );
+
+
+            return (
+              activeDroneIds.includes(droneId) &&
+              drone.alive !== false
+            );
+
+          }
+        )
+
+      : [];
 
 
   // ===================================================
