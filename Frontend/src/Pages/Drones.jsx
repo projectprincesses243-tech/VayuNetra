@@ -1,579 +1,535 @@
-import { drones } from "../data/demoData";
+import { useEffect, useMemo, useState } from "react";
+import { drones as demoDrones } from "../data/demoData";
 import { getActiveOperation } from "../data/operationStorage";
 
+const BACKEND_HTTP = "http://127.0.0.1:8000";
+const BACKEND_WS = "ws://127.0.0.1:8000/ws";
+
+function formatDroneId(id) {
+  if (typeof id === "number") return `DR-${String(id + 1).padStart(3, "0")}`;
+  const value = String(id ?? "");
+  if (/^DR-\d+$/i.test(value)) return value.toUpperCase();
+  if (/^\d+$/.test(value)) return `DR-${String(Number(value) + 1).padStart(3, "0")}`;
+  return value || "DR-???";
+}
+
+function numericBackendId(id) {
+  if (typeof id === "number") return id;
+  const value = String(id ?? "");
+  const match = value.match(/^DR-(\d+)$/i);
+  if (match) return Math.max(0, Number(match[1]) - 1);
+  if (/^\d+$/.test(value)) return Number(value);
+  return null;
+}
+
+function normalizeStatus(status) {
+  const value = String(status || "").toUpperCase();
+
+  if (
+    value.includes("DISABLED") ||
+    value.includes("UNAVAILABLE") ||
+    value.includes("OFFLINE")
+  ) return "UNAVAILABLE";
+
+  if (value.includes("CHARG")) return "CHARGING";
+
+  if (
+    value.includes("DEPLOY") ||
+    value.includes("ASSESS") ||
+    value.includes("ACTIVE") ||
+    value.includes("OPERAT") ||
+    value.includes("TRAVEL") ||
+    value.includes("ARRIVE")
+  ) return "ACTIVE";
+
+  return "AVAILABLE";
+}
+
+function getBackendDroneMap(
+  state,
+  activeOperation
+) {
+
+  if (!activeOperation) {
+    return new Map();
+  }
+  const map = new Map();
+  const fleet = state?.fleet || {};
+  const deployment = state?.deployment || {};
+  const recon = deployment?.recon || {};
+
+  const addIds = (ids, status, mission, zone) => {
+    (Array.isArray(ids) ? ids : []).forEach((id) => {
+      map.set(numericBackendId(id), {
+        status,
+        mission,
+        zone,
+      });
+    });
+  };
+
+  addIds(
+    recon.assessment_drone_ids || fleet.assessment_drone_ids,
+    "ACTIVE",
+    deployment.mission_name || deployment.mission_id || "Initial Assessment",
+    "ASSESSMENT"
+  );
+
+  const mainSwarm = deployment.main_swarm || {};
+
+  addIds(
+    mainSwarm.assigned_drone_ids || fleet.main_swarm_drone_ids,
+    "ACTIVE",
+    deployment.mission_name || deployment.mission_id || "Main Swarm",
+    null
+  );
+
+  const disabledIds =
+    fleet.disabled_drone_ids ||
+    fleet.unavailable_drone_ids ||
+    deployment.disabled_drone_ids ||
+    [];
+
+  addIds(disabledIds, "UNAVAILABLE", "Unavailable", null);
+
+  return map;
+}
+
+function mergeDrones(
+  state,
+  activeOperation
+) {
+  const backendMap =
+    getBackendDroneMap(
+      state,
+      activeOperation
+    );
+
+  const base = Array.from({ length: 128 }, (_, index) => {
+    const demo = demoDrones.find(
+      (drone) => numericBackendId(drone.id) === index
+    );
+
+    return {
+      ...(demo || {}),
+      id: formatDroneId(index),
+      backendId: index,
+      battery: demo?.battery ?? 100,
+      survivorsDetected: demo?.survivorsDetected ?? 0,
+      mission: demo?.mission || "Station",
+      zone: demo?.zone || "—",
+      status: normalizeStatus(demo?.status || "AVAILABLE"),
+    };
+  });
+
+  if (!state) return base;
+
+  const backendFleet = state.fleet || {};
+  const backendMapValues = backendMap;
+
+  return base.map((drone) => {
+    const backend = backendMapValues.get(drone.backendId);
+
+    if (!backend) return drone;
+
+    return {
+      ...drone,
+      status: backend.status,
+      mission: backend.mission || drone.mission,
+      zone: backend.zone || drone.zone,
+    };
+  });
+}
 
 function Drones() {
+  const [backendState, setBackendState] = useState(null);
+  const [connection, setConnection] = useState("CONNECTING");
 
-  // ==========================================
-  // GET CURRENT ACTIVE OPERATION
-  // ==========================================
+  const [activeOperation, setActiveOperation] =
+    useState(() => getActiveOperation());
 
-  const activeOperation =
-    getActiveOperation();
+  useEffect(() => {
 
+    const syncOperation = () => {
+      setActiveOperation(
+        getActiveOperation()
+      );
+    };
 
-  // ==========================================
-  // FLEET COUNTS
-  // ==========================================
+    const timer = setInterval(
+      syncOperation,
+      1000
+    );
 
-  const totalFleet = drones.length;
+    return () => {
+      clearInterval(timer);
+    };
 
-  const available =
-    drones.filter(
-      drone => drone.status === "AVAILABLE"
-    ).length;
+  }, []);
 
-  const charging =
-    drones.filter(
-      drone => drone.status === "CHARGING"
-    ).length;
+  useEffect(() => {
+    let socket;
+    let cancelled = false;
+    let reconnectTimer;
 
-  const unavailable =
-    drones.filter(
-      drone => drone.status === "UNAVAILABLE"
-    ).length;
+    const loadState = async () => {
+      try {
+        const response = await fetch(`${BACKEND_HTTP}/api/state`);
+        if (!response.ok) throw new Error("Backend state unavailable");
+        const state = await response.json();
 
+        if (!cancelled) {
+          setBackendState(state);
+          setConnection("CONNECTED");
+        }
+      } catch {
+        if (!cancelled) setConnection("DEMO");
+      }
+    };
 
-  // ==========================================
-  // ACTIVE DRONES
-  // ==========================================
-  //
-  // If an operation is currently running,
-  // use the exact drones allocated to it.
-  //
-  // Otherwise use the demo ACTIVE drones.
-  // ==========================================
+    const connect = () => {
+      if (cancelled) return;
 
-  const operationDroneIds =
-    activeOperation?.assignedDrones || [];
+      try {
+        socket = new WebSocket(BACKEND_WS);
 
-
-  const activeDrones =
-    operationDroneIds.length > 0
-
-      ? drones.filter(drone =>
-          operationDroneIds.includes(drone.id)
-        )
-
-      : drones.filter(
-          drone => drone.status === "ACTIVE"
-        );
-
-
-  const active =
-    activeDrones.length;
-
-
-  // ==========================================
-  // DISPLAY FLEET
-  // ==========================================
-
-  const displayDrones =
-    drones.map(drone => {
-
-      const operationDrone =
-        activeDrones.find(
-          activeDrone =>
-            activeDrone.id === drone.id
-        );
-
-
-      if (operationDrone) {
-
-        return {
-
-          ...drone,
-
-          status: "ACTIVE",
-
-          mission:
-            activeOperation?.operation ||
-            activeOperation?.name ||
-            drone.mission ||
-            "Active Operation"
-
+        socket.onopen = () => {
+          if (!cancelled) setConnection("CONNECTED");
         };
 
+        socket.onmessage = (event) => {
+          try {
+            const state = JSON.parse(event.data);
+            if (!cancelled) {
+              setBackendState(state);
+              setConnection("CONNECTED");
+            }
+          } catch {
+            // Ignore malformed websocket messages.
+          }
+        };
+
+        socket.onerror = () => {
+          if (!cancelled) setConnection("DEMO");
+        };
+
+        socket.onclose = () => {
+          if (cancelled) return;
+          setConnection("RECONNECTING");
+          reconnectTimer = setTimeout(connect, 2000);
+        };
+      } catch {
+        if (!cancelled) setConnection("DEMO");
       }
+    };
 
+    loadState();
+    connect();
 
-      return drone;
+    return () => {
+      cancelled = true;
+      clearTimeout(reconnectTimer);
+      if (socket) socket.close();
+    };
+  }, []);
 
-    });
+  const displayDrones = useMemo(
+    () =>
+      mergeDrones(
+        backendState,
+        activeOperation
+      ),
+    [
+      backendState,
+      activeOperation
+    ]
+  );
 
+  const counts = useMemo(() => {
+    return displayDrones.reduce(
+      (result, drone) => {
+        result.total += 1;
+        if (drone.status === "ACTIVE") result.active += 1;
+        else if (drone.status === "CHARGING") result.charging += 1;
+        else if (drone.status === "UNAVAILABLE") result.unavailable += 1;
+        else result.available += 1;
+        return result;
+      },
+      {
+        total: 0,
+        active: 0,
+        available: 0,
+        charging: 0,
+        unavailable: 0,
+      }
+    );
+  }, [displayDrones]);
+
+  const deployment = backendState?.deployment || {};
+  const recon = deployment?.recon || {};
+  const mainSwarm = deployment?.main_swarm || {};
+
+  const assessmentIds = new Set(
+    activeOperation
+      ? (recon.assessment_drone_ids || [])
+          .map(numericBackendId)
+      : []
+  );
+
+  const mainSwarmIds = new Set(
+    activeOperation
+      ? (
+          mainSwarm.assigned_drone_ids ||
+          backendState?.fleet?.main_swarm_drone_ids ||
+          []
+        ).map(numericBackendId)
+      : []
+  );
+
+  const currentMission =
+    deployment.mission_name ||
+    deployment.mission_id ||
+    activeOperation?.operation ||
+    activeOperation?.name ||
+    "No active mission";
 
   return (
-
     <main className="dashboard">
-
-
-      {/* =========================
-          PAGE HEADER
-      ========================== */}
-
       <section className="hero-section">
-
         <div>
-
-          <p className="eyebrow">
-            FLEET MANAGEMENT
-          </p>
-
+          <p className="eyebrow">FLEET MANAGEMENT</p>
           <h2>
             Drone <span>Fleet</span>
           </h2>
-
           <p className="hero-description">
-            Monitor the availability, health, location and
+            Monitor the availability, health, mission assignment and
             operational status of the VayuNetra drone swarm.
           </p>
-
         </div>
-
 
         <div className="mission-status">
-
           <span className="status-dot"></span>
-
-          Fleet Monitoring Active
-
+          {connection === "CONNECTED"
+            ? "Live Fleet Monitoring"
+            : connection === "RECONNECTING"
+              ? "Reconnecting to Backend"
+              : "Demo Fleet Data"}
         </div>
-
       </section>
-
-
-      {/* =========================
-          FLEET OVERVIEW
-      ========================== */}
 
       <section className="dashboard-grid">
-
-
-        {/* TOTAL */}
-
         <div className="dashboard-card">
-
-          <div className="card-icon">
-            🚁
-          </div>
-
+          <div className="card-icon">🚁</div>
           <div>
-
-            <p>
-              TOTAL FLEET
-            </p>
-
-            <h3>
-              {totalFleet}
-            </h3>
-
-            <span>
-              Registered drone units
-            </span>
-
+            <p>TOTAL FLEET</p>
+            <h3>{counts.total}</h3>
+            <span>Maximum fleet capacity</span>
           </div>
-
         </div>
 
-
-        {/* AVAILABLE */}
-
         <div className="dashboard-card">
-
-          <div className="card-icon">
-            ✓
-          </div>
-
+          <div className="card-icon">✓</div>
           <div>
-
-            <p>
-              AVAILABLE
-            </p>
-
-            <h3>
-              {available}
-            </h3>
-
-            <span>
-              Ready for deployment
-            </span>
-
+            <p>AVAILABLE</p>
+            <h3>{counts.available}</h3>
+            <span>Ready for deployment</span>
           </div>
-
         </div>
 
-
-        {/* ACTIVE */}
-
         <div className="dashboard-card">
-
-          <div className="card-icon">
-            ⚡
-          </div>
-
+          <div className="card-icon">⚡</div>
           <div>
-
-            <p>
-              ACTIVE
-            </p>
-
-            <h3>
-              {active}
-            </h3>
-
-            <span>
-              Currently operating
-            </span>
-
+            <p>ACTIVE</p>
+            <h3>{counts.active}</h3>
+            <span>Assessment and swarm drones</span>
           </div>
-
         </div>
 
-
-        {/* CHARGING */}
-
         <div className="dashboard-card">
-
-          <div className="card-icon">
-            🔋
-          </div>
-
+          <div className="card-icon">🔋</div>
           <div>
-
-            <p>
-              CHARGING
-            </p>
-
-            <h3>
-              {charging}
-            </h3>
-
-            <span>
-              Currently charging
-            </span>
-
+            <p>CHARGING</p>
+            <h3>{counts.charging}</h3>
+            <span>Returning to readiness</span>
           </div>
-
         </div>
-
       </section>
 
-
-      {/* =========================
-          FLEET STATUS
-      ========================== */}
-
-      <section
-        className="map-panel"
-        style={{ marginTop: "18px" }}
-      >
-
+      <section className="map-panel" style={{ marginTop: "18px" }}>
         <div className="panel-header">
-
           <div>
-
-            <p>
-              SWARM STATUS
-            </p>
-
-            <h3>
-              Fleet Operations
-            </h3>
-
+            <p>LIVE FLEET STATUS</p>
+            <h3>Current Deployment</h3>
           </div>
 
-
-          <span className="map-status">
-            {totalFleet} UNITS
-          </span>
-
+          <span className="map-status">{counts.total} UNITS</span>
         </div>
-
 
         <div style={{ padding: "25px" }}>
-
-
-          {/* AVAILABLE */}
-
           <div className="action-item">
-
             <span className="action-indicator"></span>
-
             <div>
-
-              <strong>
-                {available} drones available
-              </strong>
-
+              <strong>{counts.active} drones active</strong>
               <p>
-                Ready for immediate mission allocation
+                {deployment.status || "Fleet is ready for mission activity"}
               </p>
-
             </div>
-
           </div>
 
-
-          {/* ACTIVE */}
-
           <div className="action-item">
-
             <span className="action-indicator"></span>
-
             <div>
-
               <strong>
-                {active} drones active
+                {assessmentIds.size} assessment drones
               </strong>
-
               <p>
-
-                {activeOperation
-                  ? `Assigned to ${activeOperation.operation || "active operation"}`
-                  : "Currently assigned to operations"}
-
+                {assessmentIds.size > 0
+                  ? "DR-001 to DR-004 are reserved for initial assessment."
+                  : "No assessment team is currently deployed."}
               </p>
-
             </div>
-
           </div>
 
-
-          {/* CHARGING */}
+          <div className="action-item">
+            <span className="action-indicator"></span>
+            <div>
+              <strong>{mainSwarmIds.size} main-swarm drones</strong>
+              <p>
+                {mainSwarmIds.size > 0
+                  ? `Assigned to dynamic priority zones for ${currentMission}.`
+                  : "Main swarm has not been allocated yet."}
+              </p>
+            </div>
+          </div>
 
           <div className="action-item">
-
             <span className="action-indicator waiting"></span>
-
             <div>
-
-              <strong>
-                {charging} drones charging
-              </strong>
-
+              <strong>{counts.available} reserve drones</strong>
               <p>
-                Returning to operational readiness
+                Available capacity remains outside the current mission
+                allocation.
               </p>
-
             </div>
-
           </div>
 
-
-          {/* UNAVAILABLE */}
-
-          <div className="action-item">
-
-            <span
-              className="action-indicator"
-              style={{
-                background: "#64748b"
-              }}
-            ></span>
-
-            <div>
-
-              <strong>
-                {unavailable} drones unavailable
-              </strong>
-
-              <p>
-                Offline or undergoing maintenance
-              </p>
-
+          {counts.unavailable > 0 && (
+            <div className="action-item">
+              <span
+                className="action-indicator"
+                style={{ background: "#64748b" }}
+              ></span>
+              <div>
+                <strong>{counts.unavailable} drones unavailable</strong>
+                <p>Offline, disabled or undergoing maintenance.</p>
+              </div>
             </div>
-
-          </div>
-
+          )}
         </div>
-
       </section>
 
-
-      {/* =========================
-          PHYSICAL DEMO FLEET
-      ========================== */}
-
-      <section
-        className="map-panel"
-        style={{ marginTop: "18px" }}
-      >
-
+      <section className="map-panel" style={{ marginTop: "18px" }}>
         <div className="panel-header">
-
           <div>
-
-            <p>
-              PROTOTYPE HARDWARE
-            </p>
-
-            <h3>
-              Physical Demonstration Fleet
-            </h3>
-
+            <p>128-DRONE FLEET</p>
+            <h3>Drone Units</h3>
           </div>
 
-
           <span className="map-status">
-            {displayDrones.length} DEMO UNITS
+            {connection === "CONNECTED" ? "LIVE" : "LOCAL"}
           </span>
-
         </div>
-
 
         <div
           style={{
             padding: "25px",
             display: "grid",
-            gap: "10px"
+            gap: "10px",
           }}
         >
+          {displayDrones.map((drone) => {
+            const isAssessment = assessmentIds.has(drone.backendId);
+            const isMainSwarm = mainSwarmIds.has(drone.backendId);
 
-          {displayDrones.map((drone) => (
+            let displayStatus = drone.status;
+            let mission = drone.mission || "Station";
+            let zone = drone.zone || "—";
 
-            <div
-              key={drone.id}
-              className="dashboard-card"
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "110px 1fr 1fr 140px 120px",
-                alignItems: "center",
-                gap: "20px"
-              }}
-            >
+            if (isAssessment) {
+              displayStatus = "ACTIVE";
+              mission = currentMission || "Initial Assessment";
+              zone = "ASSESSMENT";
+            } else if (isMainSwarm) {
+              displayStatus = "ACTIVE";
+              mission = currentMission || "Main Swarm";
+              zone = drone.zone || "DYNAMIC ZONE";
+            }
 
+            return (
+              <div
+                key={drone.backendId}
+                className="dashboard-card"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "110px 120px minmax(180px, 1fr) 130px 110px 140px",
+                  alignItems: "center",
+                  gap: "18px",
+                }}
+              >
+                <div>
+                  <p>DRONE</p>
+                  <h3>{drone.id}</h3>
+                </div>
 
-              {/* DRONE ID */}
+                <div>
+                  <p>STATUS</p>
+                  <strong>{displayStatus}</strong>
+                </div>
 
-              <div>
+                <div>
+                  <p>MISSION</p>
+                  <span>{mission}</span>
+                </div>
 
-                <p>
-                  DRONE
-                </p>
+                <div>
+                  <p>ZONE</p>
+                  <span>{zone}</span>
+                </div>
 
-                <h3>
-                  {drone.id}
-                </h3>
+                <div>
+                  <p>BATTERY</p>
+                  <span>🔋 {drone.battery ?? "—"}%</span>
+                </div>
 
+                <div>
+                  <p>DETECTION</p>
+                  <span>
+                    {drone.survivorsDetected ?? 0} survivors
+                  </span>
+                </div>
               </div>
-
-
-              {/* STATUS */}
-
-              <div>
-
-                <p>
-                  STATUS
-                </p>
-
-                <strong>
-                  {drone.status}
-                </strong>
-
-              </div>
-
-
-              {/* MISSION */}
-
-              <div>
-
-                <p>
-                  MISSION
-                </p>
-
-                <span>
-                  {drone.mission || "Station"}
-                </span>
-
-              </div>
-
-
-              {/* BATTERY */}
-
-              <div>
-
-                <p>
-                  BATTERY
-                </p>
-
-                <span>
-                  🔋 {drone.battery}%
-                </span>
-
-              </div>
-
-
-              {/* SURVIVORS */}
-
-              <div>
-
-                <p>
-                  SURVIVORS
-                </p>
-
-                <h3>
-                  {drone.survivorsDetected}
-                </h3>
-
-              </div>
-
-            </div>
-
-          ))}
-
+            );
+          })}
         </div>
-
       </section>
 
-
-      {/* =========================
-          INTEGRATION INFORMATION
-      ========================== */}
-
-      <section
-        className="map-panel"
-        style={{ marginTop: "18px" }}
-      >
-
+      <section className="map-panel" style={{ marginTop: "18px" }}>
         <div
           style={{
             padding: "18px",
             color: "#697386",
-            fontSize: "10px"
+            fontSize: "10px",
           }}
         >
-
-          <strong>
-            Integration fields:
-          </strong>
-
-          {" "}
-          Drone ID → Swarm System
-
-          {" | "}
-
-          Status → Simulation
-
-          {" | "}
-
-          Battery → Hardware
-
-          {" | "}
-
-          Mission → Mission Allocation
-
-          {" | "}
-
-          Survivor Count → Perception
-
+          <strong>Fleet accounting:</strong>{" "}
+          128 = maximum fleet capacity · 4 assessment drones are reserved
+          during initial assessment · main-swarm allocation is dynamic ·
+          remaining drones stay available as reserve.
         </div>
-
       </section>
-
     </main>
   );
 }
-
 
 export default Drones;

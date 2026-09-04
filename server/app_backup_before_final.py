@@ -70,7 +70,7 @@ class SimRunner:
         threading.Thread(target=self._loop, daemon=True).start()
 
     def _loop(self):
-        while self.running:
+        while self.running and self.tick < 5000:
             with self.lock:
                 if self.kill_request is not None:
                     self._do_kill(self.kill_request)

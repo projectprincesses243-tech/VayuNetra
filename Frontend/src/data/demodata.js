@@ -38,10 +38,7 @@
 // ==========================================
 
 const droneStatuses = [
-  ...Array(100).fill("AVAILABLE"),
-  ...Array(12).fill("ACTIVE"),
-  ...Array(8).fill("CHARGING"),
-  ...Array(8).fill("UNAVAILABLE")
+  ...Array(128).fill("AVAILABLE")
 ];
 
 

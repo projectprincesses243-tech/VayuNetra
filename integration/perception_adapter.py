@@ -1,8 +1,9 @@
 """
-Connects the simulation to the real detector.
+Wraps Tejaswini's perception module for the simulation loop.
 
-Falls back to a proximity model automatically if the detector or the
-image frames are unavailable, so the simulation always runs.
+Falls back to a proximity model when the real detector is unavailable, so
+the simulation always runs. Swap by passing use_real=True once her
+detect() function exists.
 """
 
 import math
@@ -11,45 +12,27 @@ from pathlib import Path
 
 
 class PerceptionAdapter:
-    def __init__(self, use_real=None, frames_dir="perception/frames",
-                 detect_radius=40.0, cell_size=50.0, seed=None):
+    def __init__(self, use_real=False, frames_dir="perception/frames",
+                 detect_radius=40.0, seed=None):
         self.detect_radius = detect_radius
-        self.cell_size = cell_size
         self.frames_dir = Path(frames_dir)
         self.rng = random.Random(seed)
+        self.cache = {}            # cell -> result, so YOLO never runs twice
         self.detector = None
         self.use_real = False
-        self.stats = {"frames_examined": 0, "alerts": 0,
-                      "uncertain": 0, "rejected": 0}
-        # Detector caches by filename. Same 100 photos every run means
-        # every seed sees identical results -> zero variance, useless
-        # evidence. Reset the cache per Mission so each experiment run
-        # genuinely re-evaluates instead of replaying old answers.
-        if use_real is None or use_real:
-            try:
-                from perception.detector import get_detector
-                get_detector().cache.clear()
-            except Exception:
-                pass
-
-        # auto-detect: use the real detector if it loads AND frames exist
-        if use_real is None:
-            use_real = self.frames_dir.exists() and \
-                       any(self.frames_dir.glob("*.jpg"))
 
         if use_real:
             try:
-                from perception.detector import detect
+                from perception.fusion import detect
                 self.detector = detect
                 self.use_real = True
-                print("[perception] real detector active")
+                print("[perception] real YOLO detector loaded")
             except Exception as e:
                 print(f"[perception] real detector unavailable, using mock: {e}")
 
     # ------------------------------------------------------------------
-    def cell_for(self, position):
-        return (int(position[0] // self.cell_size),
-                int(position[1] // self.cell_size))
+    def cell_for(self, position, cell_size=50.0):
+        return (int(position[0] // cell_size), int(position[1] // cell_size))
 
     def frame_path(self, cell):
         return self.frames_dir / f"cell_{cell[0]:02d}_{cell[1]:02d}.jpg"
@@ -59,64 +42,56 @@ class PerceptionAdapter:
         """
         Look at whatever is beneath this drone.
 
-        Returns None, or a detection dict with survivor_id, location,
-        confidence, band, frame and boxes.
+        Returns None, or a detection dict:
+            {"survivor_id", "location", "confidence", "frame", "boxes"}
 
-        Uses drone.position (truth) to decide what is physically under the
-        camera. Reports drone.belief_pos as the location, because that is
-        all a real system could report.
+        Uses drone.position (ground truth) for what is physically below the
+        drone - a camera sees what it is actually over, not what the drone
+        believes. The reported LOCATION is the drone's belief, because that
+        is all a real system could report.
         """
+        cell = self.cell_for(drone.position)
+
         if self.use_real:
-            return self._scan_real(drone, survivors)
+            result = self._scan_real(cell)
+            if not result or not result.get("alert"):
+                return None
+            near = self._nearest_survivor(drone, survivors)
+            if near is None:
+                return None
+            return {
+                "survivor_id": near["id"],
+                "location": list(near["pos"]),
+                "confidence": round(result.get("confidence", 0.0), 2),
+                "frame": result.get("frame"),
+                "boxes": result.get("boxes", []),
+            }
+
         return self._scan_mock(drone, survivors)
 
-    def _scan_real(self, drone, survivors):
-        cell = self.cell_for(drone.position)
+    def _scan_real(self, cell):
+        if cell in self.cache:
+            return self.cache[cell]
         path = self.frame_path(cell)
         if not path.exists():
+            self.cache[cell] = None
             return None
-
-        self.stats["frames_examined"] += 1
-        result = self.detector(path)
-
-        if result["band"] == "uncertain":
-            self.stats["uncertain"] += 1
-        if not result["alert"]:
-            if result["votes"] >= 1:
-                self.stats["rejected"] += 1
-            return None
-
-        near = self._nearest_survivor(drone, survivors)
-        if near is None:
-            self.stats["rejected"] += 1     # model fired with nobody there
-            return None
-
-        self.stats["alerts"] += 1
-        return {
-            "survivor_id": near["id"],
-            "location": list(near["pos"]),
-            "confidence": result["confidence"],
-            "band": result["band"],
-            "votes": result["votes"],
-            "rgb": result["rgb"],
-            "thermal": result["thermal"],
-            "blob": result["blob"],
-            "frame": result["frame"],
-            "boxes": result["boxes"],
-        }
+        try:
+            result = self.detector(str(path))
+        except Exception as e:
+            print(f"[perception] detect() failed on {path.name}: {e}")
+            result = None
+        self.cache[cell] = result
+        return result
 
     def _scan_mock(self, drone, survivors):
         near = self._nearest_survivor(drone, survivors)
         if near is None:
             return None
-        self.stats["alerts"] += 1
         return {
             "survivor_id": near["id"],
             "location": list(near["pos"]),
             "confidence": round(self.rng.uniform(0.72, 0.95), 2),
-            "band": "confident",
-            "votes": 2,
-            "rgb": 0.0, "thermal": 0.0, "blob": 0.0,
             "frame": None,
             "boxes": [],
         }

@@ -3,15 +3,19 @@
 // ==========================================
 //
 // Handles:
-// - Active operation
+// - Active operation persistence
 // - Mission history
-// - Saving operations
-// - Moving operations to history
-// - Deleting history
+// - Updating missions
+// - Moving stopped missions to history
 //
-// Uses browser localStorage so the demo
-// survives page refreshes.
+// Uses browser localStorage.
+//
+// Mission remains until:
+// 1. Operator stops mission
+// 2. 4 hour safety timeout
+//
 // ==========================================
+
 
 
 // ==========================================
@@ -19,235 +23,435 @@
 // ==========================================
 
 const ACTIVE_OPERATION_KEY =
-  "vayunetra_active_operation";
+    "vayunetra_active_operation";
+
 
 const HISTORY_KEY =
-  "vayunetra_operation_history";
+    "vayunetra_operation_history";
+
 
 
 // ==========================================
-// ACTIVE OPERATION
+// MAX OPERATION TIME
 // ==========================================
 
-export function getActiveOperation() {
+const MAX_OPERATION_TIME =
+    4 * 60 * 60 * 1000;
 
-  try {
 
-    const saved =
-      localStorage.getItem(
-        ACTIVE_OPERATION_KEY
-      );
 
-    if (!saved) {
-      return null;
+// ==========================================
+// GET ACTIVE OPERATION
+// ==========================================
+
+export function getActiveOperation(){
+
+    try {
+
+
+        const saved =
+            localStorage.getItem(
+                ACTIVE_OPERATION_KEY
+            );
+
+
+        if(!saved){
+            return null;
+        }
+
+
+        const operation =
+            JSON.parse(saved);
+
+
+
+        // Safety timeout
+        if(operation.startedAt){
+
+            const age =
+                Date.now()
+                -
+                new Date(
+                    operation.startedAt
+                ).getTime();
+
+
+
+            if(age > MAX_OPERATION_TIME){
+
+                addToHistory({
+
+                    ...operation,
+
+                    status:
+                        "COMPLETED",
+
+                    completedAt:
+                        new Date().toISOString()
+
+                });
+
+
+                clearActiveOperation();
+
+
+                return null;
+
+            }
+
+        }
+
+
+
+        return operation;
+
+
+
+    }
+    catch(error){
+
+
+        console.error(
+            "Unable to read active operation:",
+            error
+        );
+
+
+        return null;
+
     }
 
-    return JSON.parse(saved);
-
-  } catch (error) {
-
-    console.error(
-      "Unable to read active operation:",
-      error
-    );
-
-    return null;
-  }
-
 }
+
+
 
 
 // ==========================================
 // SAVE ACTIVE OPERATION
 // ==========================================
 
-export function saveActiveOperation(operation) {
+export function saveActiveOperation(operation){
 
-  try {
+    try{
 
-    localStorage.setItem(
-      ACTIVE_OPERATION_KEY,
-      JSON.stringify(operation)
-    );
 
-  } catch (error) {
+        localStorage.setItem(
 
-    console.error(
-      "Unable to save active operation:",
-      error
-    );
+            ACTIVE_OPERATION_KEY,
 
-  }
+            JSON.stringify(
+                operation
+            )
+
+        );
+
+
+    }
+    catch(error){
+
+
+        console.error(
+            "Unable to save active operation:",
+            error
+        );
+
+
+    }
 
 }
+
+
+
+
+
+// ==========================================
+// UPDATE ACTIVE OPERATION
+// ==========================================
+
+export function updateActiveOperation(updates){
+
+    try{
+
+
+        const current =
+            getActiveOperation();
+
+
+
+        if(!current){
+
+            return null;
+
+        }
+
+
+
+        const updated = {
+
+
+            ...current,
+
+
+            ...updates,
+
+
+            updatedAt:
+                new Date().toISOString()
+
+
+        };
+
+
+
+        saveActiveOperation(
+            updated
+        );
+
+
+
+        return updated;
+
+
+
+    }
+    catch(error){
+
+
+        console.error(
+            "Unable to update operation:",
+            error
+        );
+
+
+        return null;
+
+    }
+
+}
+
+
+
 
 
 // ==========================================
 // CLEAR ACTIVE OPERATION
 // ==========================================
 
-export function clearActiveOperation() {
+export function clearActiveOperation(){
 
-  try {
+    try{
 
-    localStorage.removeItem(
-      ACTIVE_OPERATION_KEY
-    );
 
-  } catch (error) {
+        localStorage.removeItem(
+            ACTIVE_OPERATION_KEY
+        );
 
-    console.error(
-      "Unable to clear active operation:",
-      error
-    );
 
-  }
+    }
+    catch(error){
+
+
+        console.error(
+            "Unable to clear active operation:",
+            error
+        );
+
+
+    }
 
 }
+
+
+
 
 
 // ==========================================
 // GET HISTORY
 // ==========================================
 
-export function getHistory() {
+export function getHistory(){
 
-  try {
+    try{
 
-    const saved =
-      localStorage.getItem(
-        HISTORY_KEY
-      );
 
-    if (!saved) {
-      return [];
+        const saved =
+            localStorage.getItem(
+                HISTORY_KEY
+            );
+
+
+        if(!saved){
+
+            return [];
+
+        }
+
+
+
+        const history =
+            JSON.parse(saved);
+
+
+
+        return Array.isArray(history)
+            ? history
+            : [];
+
+
+
+    }
+    catch(error){
+
+
+        console.error(
+            "Unable to read history:",
+            error
+        );
+
+
+        return [];
+
     }
 
-    const history =
-      JSON.parse(saved);
+}
 
-    return Array.isArray(history)
-      ? history
-      : [];
 
-  } catch (error) {
 
-    console.error(
-      "Unable to read operation history:",
-      error
-    );
 
-    return [];
 
-  }
+// ==========================================
+// ADD TO HISTORY
+// ==========================================
+
+export function addToHistory(operation){
+
+    try{
+
+
+        const history =
+            getHistory();
+
+
+
+        const updated = [
+
+            operation,
+
+            ...history
+
+        ];
+
+
+
+        localStorage.setItem(
+
+            HISTORY_KEY,
+
+            JSON.stringify(
+                updated
+            )
+
+        );
+
+
+    }
+    catch(error){
+
+
+        console.error(
+            "Unable to add history:",
+            error
+        );
+
+
+    }
 
 }
 
 
-// ==========================================
-// ADD OPERATION TO HISTORY
-// ==========================================
 
-export function addToHistory(operation) {
-
-  try {
-
-    const history =
-      getHistory();
-
-
-    /*
-      Add newest operation at the top.
-    */
-
-    const updatedHistory = [
-      operation,
-      ...history
-    ];
-
-
-    localStorage.setItem(
-      HISTORY_KEY,
-      JSON.stringify(
-        updatedHistory
-      )
-    );
-
-
-  } catch (error) {
-
-    console.error(
-      "Unable to add operation to history:",
-      error
-    );
-
-  }
-
-}
 
 
 // ==========================================
 // DELETE FROM HISTORY
 // ==========================================
 
-export function deleteFromHistory(operationId) {
+export function deleteFromHistory(operationId){
 
-  try {
-
-    const history =
-      getHistory();
+    try{
 
 
-    const updatedHistory =
-      history.filter(
-        operation =>
-          operation.id !== operationId
-      );
+        const history =
+            getHistory();
 
 
-    localStorage.setItem(
-      HISTORY_KEY,
-      JSON.stringify(
-        updatedHistory
-      )
-    );
+
+        const updated =
+
+            history.filter(
+
+                operation =>
+
+                    operation.id !== operationId
+
+            );
 
 
-  } catch (error) {
 
-    console.error(
-      "Unable to delete operation:",
-      error
-    );
+        localStorage.setItem(
 
-  }
+            HISTORY_KEY,
+
+            JSON.stringify(
+                updated
+            )
+
+        );
+
+
+
+    }
+    catch(error){
+
+
+        console.error(
+            "Unable to delete history:",
+            error
+        );
+
+
+    }
 
 }
 
 
+
+
+
 // ==========================================
-// CLEAR ALL HISTORY
-// ==========================================
-//
-// Not currently used by the UI,
-// but useful later if needed.
+// CLEAR HISTORY
 // ==========================================
 
-export function clearHistory() {
+export function clearHistory(){
 
-  try {
+    try{
 
-    localStorage.removeItem(
-      HISTORY_KEY
-    );
 
-  } catch (error) {
+        localStorage.removeItem(
+            HISTORY_KEY
+        );
 
-    console.error(
-      "Unable to clear history:",
-      error
-    );
 
-  }
+    }
+    catch(error){
+
+
+        console.error(
+            "Unable to clear history:",
+            error
+        );
+
+
+    }
 
 }

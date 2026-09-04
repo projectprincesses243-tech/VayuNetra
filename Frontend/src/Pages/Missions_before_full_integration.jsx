@@ -364,11 +364,7 @@ function Missions() {
     useState([]);
 
   const [activeOperation, setActiveOperation] =
-    useState(() => {
-
-        return getActiveOperation();
-
-    });
+    useState(null);
 
 
   /* ==========================================================
@@ -457,67 +453,86 @@ function Missions() {
      RESTORE ACTIVE OPERATION
   ========================================================== */
 
-  // ==========================================================
-// MAX OPERATION TIMER
-// Keeps mission alive for 4 hours.
-// Only stops automatically after timeout.
-// ==========================================================
+  useEffect(() => {
+
+    const savedOperation =
+      getActiveOperation();
 
 
-// ==========================================
-// RESTORE STORED ACTIVE MISSION
-// ==========================================
-
-useEffect(() => {
-
-    const stored =
-        getActiveOperation();
-
-
-    if(!stored){
-        return;
+    if (!savedOperation) {
+      return;
     }
 
 
-    console.log(
-        "Restored mission:",
-        stored
-    );
-
-
     setActiveOperation(
-        stored
+      savedOperation
     );
 
 
     setMissionStatus(
-        stored.status || "active"
+      "active"
     );
 
 
-    if(
-        stored.allocatedDrones
-    ){
+    const restoredDrones =
+      (savedOperation.assignedDrones || [])
+        .map(
+          (droneId, index) => {
 
-        setAllocatedDrones(
-            stored.allocatedDrones
+            const originalDrone =
+              drones.find(
+                drone =>
+                  drone.id ===
+                  droneId
+              );
+
+
+            return {
+
+              id:
+                droneId,
+
+              role:
+                droneRoles[
+                  index %
+                  droneRoles.length
+                ],
+
+              status:
+                "Searching",
+
+              battery:
+                originalDrone?.battery ??
+                90,
+
+              survivors:
+                originalDrone?.survivorsDetected ??
+                0,
+
+              path:
+                "Active",
+
+              position:
+                originalDrone
+                  ? `${originalDrone.latitude}, ${originalDrone.longitude}`
+                  : `Sector ${
+                      String.fromCharCode(
+                        65 +
+                        (index % 6)
+                      )
+                    }`
+
+            };
+
+          }
         );
 
-    }
 
+    setAllocatedDrones(
+      restoredDrones
+    );
 
-    if(
-        stored.deployment
-    ){
-
-        setDeployment(
-            stored.deployment
-        );
-
-    }
-
-
-},[]);
+  }, []);
 
 
   /* ==========================================================
@@ -599,148 +614,6 @@ useEffect(() => {
               setDeployment(
                 state.deployment
               );
-
-              /*
-                Backend is the source of truth for swarm allocation.
-                This keeps the Missions page synchronized with the
-                dynamically allocated main swarm and its zone mapping.
-              */
-              const backendMainSwarm =
-                state.deployment.main_swarm || {};
-
-              const backendDroneIds =
-                backendMainSwarm.assigned_drone_ids || [];
-
-              if (backendDroneIds.length > 0) {
-
-                const zoneMap =
-                  backendMainSwarm.drone_zone_map ||
-                  {};
-
-                const zoneByDrone =
-                  Object.keys(zoneMap).length > 0
-                    ? zoneMap
-                    : Object.fromEntries(
-                        (backendMainSwarm.zone_allocations || [])
-                          .flatMap(zone =>
-                            (zone.allocated_drone_ids || []).map(id => [
-                              String(id),
-                              zone.id
-                            ])
-                          )
-                      );
-
-                const liveAllocated =
-                  backendDroneIds.map((droneId, index) => {
-
-                    const originalDrone =
-                      drones.find(
-                        drone =>
-                          Number(drone.id) ===
-                          Number(droneId)
-                      );
-
-                    const zoneId =
-                      zoneByDrone[String(droneId)] ||
-                      "-";
-
-                    return {
-                      id:
-                        `DR-${String(Number(droneId) + 1).padStart(3, "0")}`,
-
-                      backendId:
-                        Number(droneId),
-
-                      role:
-                        droneRoles[
-                          index % droneRoles.length
-                        ],
-
-                      status:
-                        backendMainSwarm.status === "DEPLOYED"
-                          ? "Deployed"
-                          : "Deploying",
-
-                      battery:
-                        originalDrone?.battery ??
-                        90,
-
-                      survivors:
-                        originalDrone?.survivorsDetected ??
-                        0,
-
-                      zoneId,
-
-                      path:
-                        state.deployment.direct_feasible
-                          ? "Admin Base → Incident"
-                          : "Forward Base → Incident",
-
-                      position:
-                        originalDrone
-                          ? `${originalDrone.latitude}, ${originalDrone.longitude}`
-                          : "Live backend telemetry"
-
-                    };
-
-                  });
-
-                setAllocatedDrones(
-                  liveAllocated
-                );
-
-                setActiveOperation(
-                  current => {
-
-                    if (!current) {
-                      return current;
-                    }
-
-                    const updated = {
-                      ...current,
-
-                      status:
-                        backendMainSwarm.status === "DEPLOYED"
-                          ? "ACTIVE"
-                          : current.status,
-
-                      dronesRequired:
-                        backendDroneIds.length,
-
-                      assignedDrones:
-                        liveAllocated.map(
-                          drone => drone.id
-                        ),
-
-                      backendDroneIds,
-
-                      deploymentMode:
-                        backendMainSwarm.deployment_method ||
-                        (state.deployment.direct_feasible
-                          ? "AUTOMATIC"
-                          : "FORWARD_BASE"),
-
-                      launchPoint:
-                        backendMainSwarm.launch_point ||
-                        current.launchPoint,
-
-                      progress:
-                        Number(
-                          backendMainSwarm.zone_arrival_progress_percent || 0
-                        )
-
-                    };
-
-                    saveActiveOperation(
-                      updated
-                    );
-
-                    return updated;
-
-                  }
-                );
-
-              }
 
             }
 
@@ -1797,76 +1670,64 @@ useEffect(() => {
 
 
         /*
-          Backend is the source of truth for dynamic allocation.
-          Never rebuild the swarm from the static demoData list.
+          Existing frontend drone records
+          are used for visual allocation.
         */
 
-        const backendDroneIds =
-          deployment?.main_swarm?.assigned_drone_ids ||
-          result.assigned_drone_ids ||
-          [];
+        const availableDrones =
+          drones
+            .filter(
+              drone =>
+                drone.status ===
+                "AVAILABLE"
+            )
+            .slice(
+              0,
+              Math.max(
+                1,
+                result.count ||
+                1
+              )
+            );
 
-        const zoneMap =
-          deployment?.main_swarm?.drone_zone_map ||
-          {};
 
         const allocated =
-          backendDroneIds.map(
+          availableDrones.map(
             (
-              droneId,
+              drone,
               index
-            ) => {
+            ) => ({
 
-              const originalDrone =
-                drones.find(
-                  drone =>
-                    Number(drone.id) ===
-                    Number(droneId)
-                );
+              id:
+                drone.id,
 
-              return {
+              role:
+                droneRoles[
+                  index %
+                  droneRoles.length
+                ],
 
-                id:
-                  `DR-${String(Number(droneId) + 1).padStart(3, "0")}`,
+              status:
+                "Deployed",
 
-                backendId:
-                  Number(droneId),
+              battery:
+                drone.battery ??
+                90,
 
-                role:
-                  droneRoles[
-                    index %
-                    droneRoles.length
-                  ],
+              survivors:
+                drone.survivorsDetected ??
+                0,
 
-                status:
-                  "Deployed",
+              path:
+                result.mode ===
+                "FORWARD_BASE"
+                  ? "Forward Base â†’ Incident"
+                  : "Admin Base â†’ Incident",
 
-                battery:
-                  originalDrone?.battery ??
-                  90,
+              position:
+                `${drone.latitude}, ${drone.longitude}`
 
-                survivors:
-                  originalDrone?.survivorsDetected ??
-                  0,
-
-                zoneId:
-                  zoneMap[String(droneId)] ||
-                  "-",
-
-                path:
-                  result.mode ===
-                  "FORWARD_BASE"
-                    ? "Forward Base → Incident"
-                    : "Admin Base → Incident",
-
-                position:
-                  originalDrone
-                    ? `${originalDrone.latitude}, ${originalDrone.longitude}`
-                    : "Live backend telemetry"
-
-              };
-
-            }
+            })
           );
 
 
@@ -2227,8 +2088,7 @@ useEffect(() => {
     if (
       !activeOperation ||
       activeOperation.status !==
-        "ACTIVE" ||
-      backendMission
+        "ACTIVE"
     ) {
 
       return;
@@ -2246,37 +2106,87 @@ useEffect(() => {
               if (!current) {
                 return null;
               }
-const nextProgress =
-  Math.min(
-    Number(current.progress || 0) + 0.01,
-    99
-  );
 
 
-const updatedOperation = {
-
-    ...current,
-
-    progress:
-        nextProgress,
-
-    status:
-        "ACTIVE"
-
-};
+              const nextProgress =
+                Math.min(
+                  Number(
+                    current.progress ||
+                    0
+                  ) + 1,
+                  100
+                );
 
 
-saveActiveOperation(
-    updatedOperation
-);
+              if (
+                nextProgress >=
+                100
+              ) {
+
+                const completedOperation =
+                  {
+
+                    ...current,
+
+                    progress:
+                      100,
+
+                    status:
+                      "COMPLETED",
+
+                    completedAt:
+                      new Date().toISOString()
+
+                  };
 
 
-return updatedOperation;
+                addToHistory(
+                  completedOperation
+                );
+
+
+                clearActiveOperation();
+
+
+                setMissionStatus(
+                  "pending"
+                );
+
+
+                setAllocatedDrones(
+                  []
+                );
+
+
+                setRescueRequest(
+                  null
+                );
+
+
+                return null;
+
+              }
+
+
+              const updatedOperation =
+                {
+
+                  ...current,
+
+                  progress:
+                    nextProgress
+
+                };
+
+
+              saveActiveOperation(
+                updatedOperation
+              );
+
+
+              return updatedOperation;
+
             }
-
-             
-
-              
           );
 
         },
@@ -2297,85 +2207,20 @@ return updatedOperation;
   /* ==========================================================
      STOP MISSION
   ========================================================== */
-const handleStopMission =
-  async () => {
 
-    if (!activeOperation) {
-      return;
-    }
+  const handleStopMission =
+    () => {
+
+      if (!activeOperation) {
+        return;
+      }
 
 
-    const stoppedOperation = {
-
-      ...activeOperation,
-
-      status:
-        "STOPPED",
-
-      stoppedAt:
-        new Date().toISOString()
+      setShowStopConfirm(
+        true
+      );
 
     };
-
-
-    // Save in history
-    addToHistory(
-      stoppedOperation
-    );
-
-
-    // Remove active mission permanently
-    localStorage.removeItem(
-      "vayunetra_active_operation"
-    );
-
-
-    // Clear React state
-    setActiveOperation(
-      null
-    );
-
-
-    setMissionStatus(
-      "pending"
-    );
-
-
-    setAllocatedDrones(
-      []
-    );
-
-
-    setRescueRequest(
-      null
-    );
-
-
-    setBackendMission(
-      current =>
-        current
-          ? {
-              ...current,
-              status:
-                "STOPPED"
-            }
-          : current
-    );
-
-
-    setDeployment(
-      current =>
-        current
-          ? {
-              ...current,
-              status:
-                "STOPPED"
-            }
-          : current
-    );
-
-};
-  
 
 
   const continueStopMission =
@@ -2468,9 +2313,7 @@ const handleStopMission =
 
 
       clearActiveOperation();
-localStorage.removeItem(
-  "vayunetra_active_operation"
-);
+
 
       setActiveOperation(
         null
@@ -2550,23 +2393,7 @@ localStorage.removeItem(
   const directFeasible =
     deployment?.direct_feasible;
 
-// ==========================================
-// PERSIST ACTIVE MISSION STATE
-// ==========================================
 
-useEffect(() => {
-
-    if (activeOperation) {
-
-        saveActiveOperation(
-            activeOperation
-        );
-
-    }
-
-}, [
-    activeOperation
-]);
   /* ==========================================================
      RENDER
   ========================================================== */
@@ -3040,7 +2867,7 @@ useEffect(() => {
                                 "600"
                             }}
                           >
-                            📍{" "}
+                            ðŸ“{" "}
                             {suggestion.name}
                           </span>
 
@@ -3058,7 +2885,7 @@ useEffect(() => {
                             }}
                           >
                             {suggestion.type
-                              ? `${suggestion.type} • `
+                              ? `${suggestion.type} â€¢ `
                               : ""}
                             {suggestion.latitude.toFixed(
                               5
@@ -3194,7 +3021,7 @@ useEffect(() => {
               >
                 {locationSearching
                   ? "SEARCHING..."
-                  : "🔍 SEARCH LOCATION"}
+                  : "ðŸ” SEARCH LOCATION"}
               </button>
 
 
@@ -3223,7 +3050,7 @@ useEffect(() => {
                         "11px"
                     }}
                   >
-                    ✓ LOCATION FOUND
+                    âœ“ LOCATION FOUND
                   </strong>
 
 
@@ -3288,7 +3115,7 @@ useEffect(() => {
                       "10px"
                   }}
                 >
-                  ⚠{" "}
+                  âš {" "}
                   {locationSearchError}
                 </span>
 
@@ -3447,7 +3274,7 @@ useEffect(() => {
                         : 0.5
                   }}
                 >
-                  🧪 SIMULATION
+                  ðŸ§ª SIMULATION
                 </button>
 
 
@@ -3467,7 +3294,7 @@ useEffect(() => {
                         : 0.5
                   }}
                 >
-                  🌐 REAL
+                  ðŸŒ REAL
                 </button>
 
               </div>
@@ -3559,7 +3386,7 @@ useEffect(() => {
                     "11px"
                 }}
               >
-                ⚠ {missionError}
+                âš  {missionError}
               </div>
 
             )}
@@ -3745,34 +3572,17 @@ useEffect(() => {
                   usable drone endurance envelope.
                 </p>
 
-                {deployment?.main_swarm?.status !== "DEPLOYED" && (
-                  <button
-                    type="button"
-                    onClick={deployMainSwarm}
-                    style={{
-                      marginTop: "16px",
-                      cursor: "pointer",
-                      fontWeight: "700"
-                    }}
-                  >
-                    DEPLOY MAIN SWARM DIRECTLY
-                  </button>
-                )}
-
-                {deployment?.main_swarm?.status === "DEPLOYED" && (
-                  <div
-                    style={{
-                      marginTop: "16px",
-                      padding: "12px",
-                      borderRadius: "8px",
-                      border: "1px solid rgba(34,197,94,0.22)",
-                      background: "rgba(34,197,94,0.05)",
-                      fontSize: "10px"
-                    }}
-                  >
-                    MAIN SWARM AUTOMATICALLY DEPLOYED
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={deployMainSwarm}
+                  style={{
+                    marginTop: "16px",
+                    cursor: "pointer",
+                    fontWeight: "700"
+                  }}
+                >
+                  ðŸš DEPLOY MAIN SWARM DIRECTLY
+                </button>
 
               </div>
             )}
@@ -3802,7 +3612,7 @@ useEffect(() => {
                 </p>
 
                 <h3 style={{ marginTop: "6px" }}>
-                  Mobile Zone → Incident
+                  Mobile Zone â†’ Incident
                 </h3>
 
                 <p
@@ -3923,10 +3733,10 @@ useEffect(() => {
                   >
                     <span>ADMIN BASE</span>
                     <span>
-                      {deployment?.mobile_zone?.status ===
-                      "AT_ASSESSMENT_RANGE"
-                        ? "INSIDE INITIAL ASSESSMENT RANGE"
-                        : "MOVING TO ASSESSMENT RANGE"}
+                      {deployment?.mobile_zone?.distance_to_incident_km != null &&
+                      deployment.mobile_zone.distance_to_incident_km <= 30
+                        ? "âœ“ INSIDE INITIAL ASSESSMENT RANGE"
+                        : "â†’ MOVING TO ASSESSMENT RANGE"}
                     </span>
                     <span>INCIDENT</span>
                   </div>
@@ -3946,7 +3756,7 @@ useEffect(() => {
                       fontWeight: "700"
                     }}
                   >
-                    🚚 START MOBILE BASE
+                    ðŸšš START MOBILE BASE
                   </button>
                 )}
 
@@ -3964,7 +3774,7 @@ useEffect(() => {
                   >
 
                     <strong>
-                      🔎 INITIAL ASSESSMENT RANGE REACHED
+                      ðŸ”Ž INITIAL ASSESSMENT RANGE REACHED
                     </strong>
 
                     <p
@@ -3987,7 +3797,7 @@ useEffect(() => {
                         fontWeight: "700"
                       }}
                     >
-                      🔎 DEPLOY INITIAL ASSESSMENT DRONES
+                      ðŸ”Ž DEPLOY INITIAL ASSESSMENT DRONES
                     </button>
 
                   </div>
@@ -4042,7 +3852,7 @@ useEffect(() => {
                   <div className="dashboard-card">
                     <p>ESTIMATED AREA</p>
                     <h3>
-                      {deployment.recon.disaster_region?.estimated_area_km2 ?? "-"} km²
+                      {deployment.recon.disaster_region?.estimated_area_km2 ?? "-"} kmÂ²
                     </h3>
                   </div>
 
@@ -4120,7 +3930,7 @@ useEffect(() => {
                         fontSize: "10px"
                       }}
                     >
-                      OPEN OFFICIAL SATELLITE SOURCE ↗
+                      OPEN OFFICIAL SATELLITE SOURCE â†—
                     </a>
 
                   </div>
@@ -4149,7 +3959,7 @@ useEffect(() => {
                           fontSize: "10px"
                         }}
                       >
-                        🔎 DR-{String(Number(id) + 1).padStart(3, "0")}
+                        ðŸ”Ž DR-{String(Number(id) + 1).padStart(3, "0")}
                       </span>
                     )
                   )}
@@ -4179,7 +3989,7 @@ useEffect(() => {
                               {zone.id || `Zone ${index + 1}`}
                             </td>
                             <td style={{ padding: "10px" }}>
-                              {zone.area_km2 ?? "-"} km²
+                              {zone.area_km2 ?? "-"} kmÂ²
                             </td>
                             <td style={{ padding: "10px" }}>
                               {zone.priority || "-"}
@@ -4240,13 +4050,12 @@ useEffect(() => {
                   >
                     Safety score:{" "}
                     {deployment.forward_base?.safety_score ?? "-"}
-                    {" · "}
+                    {" Â· "}
                     Source:{" "}
                     {deployment.forward_base?.source || "-"}
                   </p>
 
-                  {deployment.forward_base?.status === "SELECTED" &&
-                    !deployment.direct_feasible && (
+                  {deployment.forward_base?.status === "SELECTED" && (
                     <div
                       style={{
                         marginTop: "12px",
@@ -4263,10 +4072,9 @@ useEffect(() => {
                           fontSize: "10px"
                         }}
                       >
-                        Mobile Zone continues to this selected safe site.
-                        The main swarm deploys automatically when the
-                        Forward Base is reached. Manual deployment remains
-                        available as an operator override.
+                        Mobile Zone continues to this site. You may
+                        deploy the main swarm early or wait for automatic
+                        deployment on arrival.
                       </span>
 
                       <button
@@ -4278,28 +4086,9 @@ useEffect(() => {
                           whiteSpace: "nowrap"
                         }}
                       >
-                        DEPLOY SWARM NOW
+                        ðŸš DEPLOY SWARM NOW
                       </button>
 
-                    </div>
-                  )}
-
-                  {deployment.direct_feasible &&
-                    deployment.main_swarm?.status === "DEPLOYED" && (
-                    <div
-                      style={{
-                        marginTop: "12px",
-                        padding: "12px",
-                        borderRadius: "8px",
-                        border: "1px solid rgba(34,197,94,0.22)",
-                        background: "rgba(34,197,94,0.05)",
-                        color: "#aeb3c7",
-                        fontSize: "10px"
-                      }}
-                    >
-                      Main swarm automatically deployed from the Admin
-                      Base. Forward Base candidates were assessed but are
-                      not part of this direct deployment path.
                     </div>
                   )}
 
@@ -4569,7 +4358,7 @@ useEffect(() => {
                           "10px"
                       }}
                     >
-                      🚁 {droneId}
+                      ðŸš {droneId}
                     </span>
 
                   )
@@ -4659,7 +4448,7 @@ useEffect(() => {
 
             <span className="map-status">
 
-              ●{" "}
+              â—{" "}
 
               {rescueRequest
                 ? "REQUEST RECEIVED"
@@ -4700,7 +4489,7 @@ useEffect(() => {
                       "12px"
                   }}
                 >
-                  📡
+                  ðŸ“¡
                 </div>
 
 
@@ -5021,7 +4810,7 @@ useEffect(() => {
 
             <span className="map-status">
 
-              ●{" "}
+              â—{" "}
               {allocatedDrones.length}
               {" "}DRONES
 
@@ -5139,7 +4928,7 @@ useEffect(() => {
                       </td>
 
                       <td style={tdStyle}>
-                        🔋 {drone.battery}%
+                        ðŸ”‹ {drone.battery}%
                       </td>
 
                       <td style={tdStyle}>
@@ -5195,7 +4984,7 @@ useEffect(() => {
                       "600"
                   }}
                 >
-                  🚁 START MISSION
+                  ðŸš START MISSION
                 </button>
 
               </div>

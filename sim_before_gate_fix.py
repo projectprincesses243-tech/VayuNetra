@@ -1,4 +1,4 @@
-﻿"""
+"""
 VayuNetra integrated simulation.
 
 This module keeps the existing Digital Twin simulation and adds the
@@ -29,7 +29,6 @@ import sys
 import math
 import random
 import argparse
-import requests
 
 sys.path.insert(0, ".")
 
@@ -147,7 +146,7 @@ class Mission:
             d.belief_pos = list(d.position)
             d.velocity = [0.0, 0.0]
             d.alive = True
-            d.state = "STANDBY"
+            d.state = "SEARCHING"
             d.assigned_task = None
             d.uncertainty = 0.0
             d.search_target = None
@@ -226,14 +225,7 @@ class Mission:
 
             "fleet": {
                 "registered_count": n_drones,
-                "available_count": max(
-                    0,
-                    n_drones - len(
-                        INITIAL_ASSESSMENT_DRONE_IDS[
-                            :min(INITIAL_ASSESSMENT_DRONE_COUNT, n_drones)
-                        ]
-                    ),
-                ),
+                "available_count": n_drones,
                 "initial_assessment_drone_ids": list(INITIAL_ASSESSMENT_DRONE_IDS[:min(INITIAL_ASSESSMENT_DRONE_COUNT, n_drones)]),
                 "main_swarm_drone_ids": [],
                 "reserve_drone_ids": [],
@@ -355,15 +347,7 @@ class Mission:
         The frontend can eventually provide geocoded coordinates.
         No city/location list is hardcoded here.
         """
-        # Reset the simulation state for every new mission.
-        # This prevents tasks, survivors, auctions, metrics and
-        # Digital Twin state from leaking from the previous mission.
-        self.__init__(
-            n_drones=128,
-            n_survivors=5,
-            seed=42,
-            ranging_on=True,
-        )
+
         self.mission_config["name"] = name
 
         mode = str(mode).upper()
@@ -413,7 +397,6 @@ class Mission:
         lat2,
         lon2,
     ):
-        
         """
         Calculate great-circle distance between two coordinates.
         """
@@ -519,15 +502,9 @@ class Mission:
                 "latitude": admin["latitude"],
                 "longitude": admin["longitude"],
             }
-            # Direct deployment still starts with the four-drone
-            # initial assessment. The complete swarm is NOT launched yet.
-            self.deployment["recon"]["status"] = "WAITING_FOR_DIRECT_LAUNCH"
-            self.deployment["recon"]["launch_point"] = {
-                "latitude": admin["latitude"],
-                "longitude": admin["longitude"],
-            }
+            self.deployment["recon"]["status"] = "NOT_REQUIRED"
             self.deployment["forward_base"]["status"] = "NOT_REQUIRED"
-            self.deployment["main_swarm"]["manual_override_available"] = False
+            self.deployment["main_swarm"]["manual_override_available"] = True
         else:
             self.deployment["status"] = "MOBILE_ZONE_REQUIRED"
             self.deployment["decision_reason"] = (
@@ -826,55 +803,12 @@ class Mission:
         # Assessment completes asynchronously in _mobile_zone_step/step.
         self.deployment["recon"]["status"] = "DRONES_DEPLOYED"
 
-    def _launch_direct_initial_assessment(self):
-        """Launch exactly four assessment drones from the Admin Base."""
-        recon = self.deployment["recon"]
-
-        if recon.get("launched"):
-            return False
-
-        preferred_ids = self.deployment["fleet"].get(
-            "initial_assessment_drone_ids",
-            INITIAL_ASSESSMENT_DRONE_IDS,
-        )
-
-        recon_drones = [
-            d for d in self.drones
-            if d.alive and d.drone_id in set(preferred_ids)
-        ][:INITIAL_ASSESSMENT_DRONE_COUNT]
-
-        if len(recon_drones) < min(
-            INITIAL_ASSESSMENT_DRONE_COUNT,
-            len(self.drones),
-        ):
-            return False
-
-        recon["launched"] = True
-        recon["status"] = "DRONES_DEPLOYED"
-        recon["launch_point"] = {
-            "latitude": self.mission_config["admin_base"]["latitude"],
-            "longitude": self.mission_config["admin_base"]["longitude"],
-        }
-        recon["drones_deployed"] = [d.drone_id for d in recon_drones]
-        recon["travel_progress_percent"] = 0.0
-        recon["assessment_progress_percent"] = 0.0
-        recon["started_tick"] = BUS.tick
-        recon["assessment_complete_tick"] = (
-            BUS.tick + max(20, int(INITIAL_ASSESSMENT_TIME_MIN * 6))
-        )
-
-        for d in recon_drones:
-            d.state = "RECON_ASSESSMENT"
-
-        return True
-
     def launch_recon(self):
         """
-        Launch the four-drone initial assessment.
+        Manual/compatibility entry point.
 
-        Direct missions launch from Admin Base.
-        Mobile-Zone missions launch only after the Mobile Zone reaches
-        the dynamically calculated assessment range.
+        The operator uses this command once the Mobile Zone reaches
+        direct-fleet operational range.
         """
         incident = self._incident_coordinates()
 
@@ -882,24 +816,6 @@ class Mission:
             return {
                 "launched": False,
                 "reason": "incident location required",
-            }
-
-        recon = self.deployment["recon"]
-
-        if recon.get("launched"):
-            return {
-                "launched": False,
-                "reason": "initial assessment already launched",
-                "status": recon.get("status"),
-            }
-
-        if self.deployment.get("direct_feasible"):
-            launched = self._launch_direct_initial_assessment()
-            return {
-                "launched": launched,
-                "status": recon.get("status"),
-                "launch_point": recon.get("launch_point"),
-                "assessment_drone_ids": recon.get("drones_deployed", []),
             }
 
         mobile = self.deployment["mobile_zone"]
@@ -920,9 +836,8 @@ class Mission:
 
         return {
             "launched": True,
-            "status": recon["status"],
-            "launch_point": recon["launch_point"],
-            "assessment_drone_ids": recon.get("drones_deployed", []),
+            "status": self.deployment["recon"]["status"],
+            "launch_point": self.deployment["recon"]["launch_point"],
         }
 
     def _run_initial_assessment(self):
@@ -1095,7 +1010,7 @@ class Mission:
             "estimated": True,
             "source": "simulated_initial_assessment",
             "radius_km": round(radius_km, 2),
-            "estimated_area_km2": round(math.pi * radius_km ** 2, 2),
+            "estimated_area_km2": round(math.pi * SIMULATED_DISASTER_RADIUS_KM ** 2, 2),
         }
         recon["priority_zones"] = priority_zones
         recon["priority_status"] = "COMPLETE"
@@ -1196,14 +1111,9 @@ class Mission:
         else:
             self.deployment["forward_base"]["status"] = "NOT_SELECTED"
 
-        if self.deployment.get("direct_feasible"):
-            self.deployment["status"] = "DIRECT_ZONING_COMPLETE"
-            self.deployment["main_swarm"]["manual_override_available"] = True
-            self.deployment["mobile_zone"]["status"] = "NOT_REQUIRED"
-        else:
-            self.deployment["status"] = "FORWARD_BASE_SELECTED"
-            self.deployment["main_swarm"]["manual_override_available"] = True
-            self.deployment["mobile_zone"]["status"] = "MOVING_TO_FORWARD_BASE"
+        self.deployment["status"] = "FORWARD_BASE_SELECTED"
+        self.deployment["main_swarm"]["manual_override_available"] = True
+        self.deployment["mobile_zone"]["status"] = "MOVING_TO_FORWARD_BASE"
 
     def _establish_forward_base(self):
         mobile = self.deployment["mobile_zone"]
@@ -1313,14 +1223,10 @@ class Mission:
         """
         Deploy the main swarm.
 
-        Normal operation:
-            - Direct mission: automatically deploys after four-drone
-              assessment/zoning completes, from the Admin Base.
-            - Non-direct mission: automatically deploys when the Mobile
-              Zone reaches the selected Forward Base.
-
-        Manual operator override remains available for a selected
-        Forward Base in non-direct missions.
+        Manual operator override is allowed after a Forward Base has
+        been selected, even if the Mobile Zone has not physically
+        reached it. Normal operation automatically deploys when the
+        Forward Base is reached.
         """
         if self.deployment["main_swarm"]["status"] == "DEPLOYED":
             return {
@@ -1332,36 +1238,11 @@ class Mission:
         deployment_method = str(deployment_method).upper()
 
         if self.deployment["direct_feasible"]:
-            # Direct deployments originate at the fixed Admin Base.
-            # AUTOMATIC is the normal path after assessment/zoning.
-            if deployment_method not in {"AUTOMATIC", "MANUAL"}:
-                deployment_method = "AUTOMATIC"
             launch_point = {
                 "latitude": self.mission_config["admin_base"]["latitude"],
                 "longitude": self.mission_config["admin_base"]["longitude"],
             }
             deployment_status = "DIRECT"
-
-            recon = self.deployment["recon"]
-            if recon.get("status") == "WAITING_FOR_DIRECT_LAUNCH":
-                self._launch_direct_initial_assessment()
-                self.deployment["status"] = "DIRECT_INITIAL_ASSESSMENT"
-                return {
-                    "deployed": False,
-                    "phase": "INITIAL_ASSESSMENT",
-                    "reason": "Direct deployment starts with four assessment drones.",
-                    "assessment_drone_ids": recon.get("drones_deployed", []),
-                }
-
-            if recon.get("status") != "DIRECT_ZONING_COMPLETE":
-                return {
-                    "deployed": False,
-                    "phase": "INITIAL_ASSESSMENT",
-                    "reason": "Four-drone zoning must complete before the main swarm deploys.",
-                    "assessment_progress_percent": recon.get(
-                        "assessment_progress_percent", 0.0
-                    ),
-                }
 
         else:
             forward = self.deployment["forward_base"]
@@ -1393,49 +1274,29 @@ class Mission:
 
         for d in self.drones:
             if d.drone_id in allocated_ids:
-                d.state = "DEPLOYING_TO_ZONE"
+                d.state = "SEARCHING"
 
         self.deployment["fleet"]["main_swarm_drone_ids"] = allocated_ids
         self.deployment["fleet"]["reserve_drone_ids"] = [
             d.drone_id for d in self.drones
             if d.alive and d.drone_id not in set(allocated_ids)
-            and d.drone_id not in set(
-                self.deployment["fleet"].get(
-                    "initial_assessment_drone_ids", []
-                )
-            )
+            and d.drone_id not in set(self.deployment["fleet"].get("initial_assessment_drone_ids", []))
         ]
-        self.deployment["fleet"]["available_count"] = len(
-            self.deployment["fleet"]["reserve_drone_ids"]
-        )
 
         alive_count = len(allocated_ids)
-        zone_allocations = self.deployment["recon"].get(
-            "priority_zones", []
-        )
-        drone_zone_map = {}
-        for zone in zone_allocations:
-            for drone_id in zone.get("allocated_drone_ids", []):
-                drone_zone_map[str(drone_id)] = zone["id"]
-
         self.deployment["main_swarm"] = {
-            "status": "DEPLOYING_TO_ZONES",
+            "status": "DEPLOYED",
             "launch_point": launch_point,
             "deployed_count": alive_count,
             "deployment_method": deployment_method,
             "manual_override_available": False,
             "assigned_drone_ids": allocated_ids,
             "active_drone_count": alive_count,
-            "zone_allocations": zone_allocations,
-            "drone_zone_map": drone_zone_map,
-            "required_drone_count": self.deployment["recon"].get(
-                "required_main_swarm_count", alive_count
-            ),
-            "zoning_phase": "COMPLETE",
-            "zone_arrival_progress_percent": 0.0,
+            "zone_allocations": self.deployment["recon"].get("priority_zones", []),
+            "required_drone_count": self.deployment["recon"].get("required_main_swarm_count", alive_count),
         }
 
-        self.deployment["status"] = "MAIN_SWARM_DEPLOYING_TO_ZONES"
+        self.deployment["status"] = "MAIN_SWARM_DEPLOYED"
         self.mission_config["status"] = "ACTIVE"
 
         return {
@@ -1703,23 +1564,8 @@ class Mission:
             and tick >= recon["assessment_complete_tick"]
         ):
             recon["assessment_progress_percent"] = 100.0
+            recon["status"] = "IN_PROGRESS"
             self._run_initial_assessment()
-
-            if (
-                recon.get("perception_status") == "COMPLETE"
-                and recon.get("priority_status") == "COMPLETE"
-                and recon.get("safety_status") == "COMPLETE"
-            ):
-                # Direct missions must transition immediately from
-                # assessment/zoning into automatic main-swarm deployment.
-                # Do NOT overwrite DIRECT_ZONING_COMPLETE before the
-                # deployment routine consumes it.
-                if self.deployment.get("direct_feasible"):
-                    recon["status"] = "DIRECT_ZONING_COMPLETE"
-                    if self.deployment.get("main_swarm", {}).get("status") == "NOT_DEPLOYED":
-                        self.deploy_main_swarm(deployment_method="AUTOMATIC")
-                else:
-                    recon["status"] = "COMPLETED"
 
         # -----------------------------------------------
         # Optional demo drone kill
@@ -1777,40 +1623,6 @@ class Mission:
         # -----------------------------------------------
         # Existing drone loop
         # -----------------------------------------------
-        # -----------------------------------------------
-        # Gate existing Digital Twin until main swarm
-        # deployment is active.
-        # -----------------------------------------------
-
-        main_swarm = self.deployment.get("main_swarm", {})
-        main_swarm_status = main_swarm.get("status")
-        main_swarm_active = (
-            self.mission_config.get("status") == "ACTIVE"
-            and main_swarm_status in {
-                "DEPLOYING_TO_ZONES",
-                "DEPLOYED",
-            }
-        )
-
-        if not main_swarm_active:
-            self.bridge.update()
-            return
-
-        if main_swarm_status == "DEPLOYING_TO_ZONES":
-            progress = min(
-                100.0,
-                float(main_swarm.get("zone_arrival_progress_percent", 0.0))
-                + 5.0,
-            )
-            main_swarm["zone_arrival_progress_percent"] = round(progress, 1)
-            if progress >= 100.0:
-                main_swarm["status"] = "DEPLOYED"
-                self.deployment["status"] = "MAIN_SWARM_DEPLOYED"
-                for d in self.drones:
-                    if d.drone_id in set(
-                        main_swarm.get("assigned_drone_ids", [])
-                    ) and d.alive:
-                        d.state = "SEARCHING"
 
         for d in self.drones:
 
@@ -2091,27 +1903,6 @@ class Mission:
         existing WebSocket without a separate refresh.
         """
 
-        fleet = self.deployment.setdefault("fleet", {})
-        assessment_ids = set(
-            fleet.get("initial_assessment_drone_ids", [])
-        )
-        main_ids = set(
-            fleet.get("main_swarm_drone_ids", [])
-        )
-        disabled_ids = {
-            d.drone_id for d in self.drones if not d.alive
-        }
-        reserve_ids = [
-            d.drone_id for d in self.drones
-            if d.alive
-            and d.drone_id not in assessment_ids
-            and d.drone_id not in main_ids
-        ]
-        fleet["registered_count"] = len(self.drones)
-        fleet["disabled_drone_ids"] = sorted(disabled_ids)
-        fleet["reserve_drone_ids"] = sorted(reserve_ids)
-        fleet["available_count"] = len(reserve_ids)
-
         return {
 
             # ------------------------------------------------
@@ -2201,26 +1992,12 @@ class Mission:
                     "gps_status": "DENIED" if getattr(d, "gps_denied", False) else "AVAILABLE",
 
                     "mission_role": (
-                        "DISABLED"
-                        if not d.alive
-                        else "INITIAL_ASSESSMENT"
-                        if d.drone_id in set(
-                            self.deployment.get("fleet", {}).get(
-                                "initial_assessment_drone_ids", []
-                            )
-                        )
+                        "INITIAL_ASSESSMENT"
+                        if d.drone_id in set(self.deployment.get("fleet", {}).get("initial_assessment_drone_ids", []))
                         else "MAIN_SWARM"
-                        if d.drone_id in set(
-                            self.deployment.get("fleet", {}).get(
-                                "main_swarm_drone_ids", []
-                            )
-                        )
+                        if d.drone_id in set(self.deployment.get("fleet", {}).get("main_swarm_drone_ids", []))
                         else "RESERVE"
                     ),
-
-                    "zone_id": self.deployment.get(
-                        "main_swarm", {}
-                    ).get("drone_zone_map", {}).get(str(d.drone_id)),
 
                     "assigned_task":
                         d.assigned_task,
