@@ -1,6 +1,6 @@
 # VayuNetra — Measured Results
 
-Generated 2026-09-04 06:49  
+Generated 2026-09-04 08:23  
 
 Seeds per condition: 8  |  Reproduce with `python experiments.py`
 
@@ -9,26 +9,26 @@ Seeds per condition: 8  |  Reproduce with `python experiments.py`
 
 | Drones | Survivors rescued (of 5) | Coverage % | Ticks |
 |---|---|---|---|
-| 1 | 0 ± 0.0 | 43.38 ± 1.06 | 499 |
-| 3 | 0.75 ± 1.04 | 99.0 ± 1.77 | 499 |
-| 6 | 1.12 ± 0.99 | 100.0 ± 0.0 | 499 |
+| 1 | 0.12 ± 0.35 | 17.75 ± 11.68 | 499 |
+| 3 | 0.25 ± 0.46 | 33.0 ± 12.19 | 499 |
+| 6 | 0.5 ± 0.76 | 49.88 ± 10.59 | 499 |
 
 ## B — GPS-denied localization
 
 | Condition | Mean position error (m) | Range |
 |---|---|---|
 | Ranging ON | 8.82 ± 0.0 | 8.82 – 8.82 |
-| Ranging OFF | 84.61 ± 3.18 | 78.83 – 88.18 |
+| Ranging OFF | 85.18 ± 3.62 | 79.56 – 88.18 |
 
-**Improvement: 9.6x**
+**Improvement: 9.7x**
 
 
 ## C — GPS denial causes mission failure
 
 | Condition | Survivors rescued (of 5) |
 |---|---|
-| With ranging | 1.12 ± 0.99 |
-| Without ranging | 0.75 ± 1.04 |
+| With ranging | 0.5 ± 0.76 |
+| Without ranging | 0.38 ± 0.74 |
 
 Same detections in both cases. Without ranging, drones accept tasks but navigate on a drifted belief and fail to arrive.
 
@@ -37,8 +37,8 @@ Same detections in both cases. Without ranging, drones accept tasks but navigate
 
 | Condition | Rescued | Auctions run |
 |---|---|---|
-| No failure | 1.12 | 1.12 |
-| One drone lost mid-task | 1.12 | 1.38 |
+| No failure | 0.5 | 0.5 |
+| One drone lost mid-task | 0.5 | 0.75 |
 
 Kill timed to catch a drone carrying a task. Extra auctions are re-auctions of the released task. Recovery requires no central coordinator.
 
@@ -47,11 +47,11 @@ Kill timed to catch a drone carrying a task. Extra auctions are re-auctions of t
 
 | Fleet size | Rescued (of 5) | Coverage % |
 |---|---|---|
-| 6 | 1.12 ± 0.99 | 100.0 |
-| 5 | 0.62 ± 1.06 | 100.0 |
-| 4 | 0.62 ± 1.19 | 100.0 |
-| 3 | 0.75 ± 1.04 | 99.0 |
-| 2 | 0.25 ± 0.71 | 80.88 |
+| 6 | 0.5 ± 0.76 | 49.88 |
+| 5 | 0.75 ± 1.04 | 45.12 |
+| 4 | 0.38 ± 0.52 | 41.5 |
+| 3 | 0.25 ± 0.46 | 33.0 |
+| 2 | 0.25 ± 0.46 | 25.5 |
 
 ## What these numbers are, and are not
 

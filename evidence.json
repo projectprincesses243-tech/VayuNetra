@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-04 06:49",
+  "generated": "2026-09-04 08:23",
   "seeds": [
     1,
     7,
@@ -13,17 +13,17 @@
   "A_swarm_size": {
     "1_drones": {
       "rescued": {
-        "mean": 0,
-        "stdev": 0.0,
+        "mean": 0.12,
+        "stdev": 0.35,
         "min": 0,
-        "max": 0,
+        "max": 1,
         "n": 8
       },
       "coverage": {
-        "mean": 43.38,
-        "stdev": 1.06,
-        "min": 41.0,
-        "max": 44.0,
+        "mean": 17.75,
+        "stdev": 11.68,
+        "min": 1.0,
+        "max": 39.0,
         "n": 8
       },
       "ticks": {
@@ -36,17 +36,17 @@
     },
     "3_drones": {
       "rescued": {
-        "mean": 0.75,
-        "stdev": 1.04,
+        "mean": 0.25,
+        "stdev": 0.46,
         "min": 0,
-        "max": 2,
+        "max": 1,
         "n": 8
       },
       "coverage": {
-        "mean": 99.0,
-        "stdev": 1.77,
-        "min": 95.0,
-        "max": 100.0,
+        "mean": 33.0,
+        "stdev": 12.19,
+        "min": 18.0,
+        "max": 49.0,
         "n": 8
       },
       "ticks": {
@@ -59,17 +59,17 @@
     },
     "6_drones": {
       "rescued": {
-        "mean": 1.12,
-        "stdev": 0.99,
+        "mean": 0.5,
+        "stdev": 0.76,
         "min": 0,
-        "max": 3,
+        "max": 2,
         "n": 8
       },
       "coverage": {
-        "mean": 100.0,
-        "stdev": 0.0,
-        "min": 100.0,
-        "max": 100.0,
+        "mean": 49.88,
+        "stdev": 10.59,
+        "min": 34.0,
+        "max": 65.0,
         "n": 8
       },
       "ticks": {
@@ -90,27 +90,27 @@
       "n": 8
     },
     "ranging_off": {
-      "mean": 84.61,
-      "stdev": 3.18,
-      "min": 78.83,
+      "mean": 85.18,
+      "stdev": 3.62,
+      "min": 79.56,
       "max": 88.18,
       "n": 8
     },
-    "improvement_factor": 9.6
+    "improvement_factor": 9.7
   },
   "C_mission_impact": {
     "rescued_with_ranging": {
-      "mean": 1.12,
-      "stdev": 0.99,
+      "mean": 0.5,
+      "stdev": 0.76,
       "min": 0,
-      "max": 3,
+      "max": 2,
       "n": 8
     },
     "rescued_without_ranging": {
-      "mean": 0.75,
-      "stdev": 1.04,
+      "mean": 0.38,
+      "stdev": 0.74,
       "min": 0,
-      "max": 3,
+      "max": 2,
       "n": 8
     },
     "note": "Same detections in both cases. Without ranging, drones accept tasks but navigate on a drifted belief and fail to arrive."
@@ -118,33 +118,33 @@
   "D_failure_recovery": {
     "no_failure": {
       "rescued": {
-        "mean": 1.12,
-        "stdev": 0.99,
+        "mean": 0.5,
+        "stdev": 0.76,
         "min": 0,
-        "max": 3,
+        "max": 2,
         "n": 8
       },
       "auctions": {
-        "mean": 1.12,
-        "stdev": 0.99,
+        "mean": 0.5,
+        "stdev": 0.76,
         "min": 0,
-        "max": 3,
+        "max": 2,
         "n": 8
       }
     },
     "one_drone_lost": {
       "rescued": {
-        "mean": 1.12,
-        "stdev": 0.99,
+        "mean": 0.5,
+        "stdev": 0.76,
         "min": 0,
-        "max": 3,
+        "max": 2,
         "n": 8
       },
       "auctions": {
-        "mean": 1.38,
-        "stdev": 1.3,
+        "mean": 0.75,
+        "stdev": 1.16,
         "min": 0,
-        "max": 4,
+        "max": 3,
         "n": 8
       },
       "drones_lost": {
@@ -160,81 +160,81 @@
   "E_degradation": {
     "6_drones": {
       "rescued": {
-        "mean": 1.12,
-        "stdev": 0.99,
-        "min": 0,
-        "max": 3,
-        "n": 8
-      },
-      "coverage": {
-        "mean": 100.0,
-        "stdev": 0.0,
-        "min": 100.0,
-        "max": 100.0,
-        "n": 8
-      }
-    },
-    "5_drones": {
-      "rescued": {
-        "mean": 0.62,
-        "stdev": 1.06,
-        "min": 0,
-        "max": 3,
-        "n": 8
-      },
-      "coverage": {
-        "mean": 100.0,
-        "stdev": 0.0,
-        "min": 100.0,
-        "max": 100.0,
-        "n": 8
-      }
-    },
-    "4_drones": {
-      "rescued": {
-        "mean": 0.62,
-        "stdev": 1.19,
-        "min": 0,
-        "max": 3,
-        "n": 8
-      },
-      "coverage": {
-        "mean": 100.0,
-        "stdev": 0.0,
-        "min": 100.0,
-        "max": 100.0,
-        "n": 8
-      }
-    },
-    "3_drones": {
-      "rescued": {
-        "mean": 0.75,
-        "stdev": 1.04,
+        "mean": 0.5,
+        "stdev": 0.76,
         "min": 0,
         "max": 2,
         "n": 8
       },
       "coverage": {
-        "mean": 99.0,
-        "stdev": 1.77,
-        "min": 95.0,
-        "max": 100.0,
+        "mean": 49.88,
+        "stdev": 10.59,
+        "min": 34.0,
+        "max": 65.0,
+        "n": 8
+      }
+    },
+    "5_drones": {
+      "rescued": {
+        "mean": 0.75,
+        "stdev": 1.04,
+        "min": 0,
+        "max": 3,
+        "n": 8
+      },
+      "coverage": {
+        "mean": 45.12,
+        "stdev": 12.98,
+        "min": 19.0,
+        "max": 60.0,
+        "n": 8
+      }
+    },
+    "4_drones": {
+      "rescued": {
+        "mean": 0.38,
+        "stdev": 0.52,
+        "min": 0,
+        "max": 1,
+        "n": 8
+      },
+      "coverage": {
+        "mean": 41.5,
+        "stdev": 12.74,
+        "min": 19.0,
+        "max": 64.0,
+        "n": 8
+      }
+    },
+    "3_drones": {
+      "rescued": {
+        "mean": 0.25,
+        "stdev": 0.46,
+        "min": 0,
+        "max": 1,
+        "n": 8
+      },
+      "coverage": {
+        "mean": 33.0,
+        "stdev": 12.19,
+        "min": 18.0,
+        "max": 49.0,
         "n": 8
       }
     },
     "2_drones": {
       "rescued": {
         "mean": 0.25,
-        "stdev": 0.71,
+        "stdev": 0.46,
         "min": 0,
-        "max": 2,
+        "max": 1,
         "n": 8
       },
       "coverage": {
-        "mean": 80.88,
-        "stdev": 3.6,
-        "min": 76.0,
-        "max": 86.0,
+        "mean": 25.5,
+        "stdev": 11.82,
+        "min": 12.0,
+        "max": 43.0,
         "n": 8
       }
     }
