@@ -3,6 +3,9 @@
 import sys, math, random, argparse
 sys.path.insert(0, ".")
 
+from world.environment import Environment
+from planning.astar import AStarPlanner
+from planning.path_follower import PathFollower
 from swarm.drone import Drone
 from core.bus import BUS
 from core.contracts import make_task
@@ -45,6 +48,19 @@ class Mission:
         self.perception = PerceptionAdapter(seed=seed)
         self.tasks = {}
         self.complete = False
+
+        # Real obstacle-aware navigation. Environment matches this mission's
+        # actual world size (500x500) rather than config.py's defaults, so
+        # A* plans against the same space drones actually move in.
+        #
+        # PathFollower is ONE shared object that tracks every drone's path
+        # internally by drone_id - not one instance per drone. AStarPlanner
+        # IS one per drone, since each holds its own grid built from the
+        # shared environment.
+        self.environment = Environment(width=SIZE, height=SIZE)
+        self.planners = {d.drone_id: AStarPlanner(self.environment) for d in self.drones}
+        self.follower = PathFollower()
+        self._last_target = {}   # drone_id -> last planned-for target, to detect changes
 
         # ---- distributed search state ----
         # Every cell centre that still needs sweeping.
@@ -92,7 +108,12 @@ class Mission:
 
     # ------------------------------------------------------------------
     def move(self, d):
-        """Fly to an assigned survivor, otherwise sweep the next search cell."""
+        """Fly to an assigned survivor, otherwise sweep the next search cell.
+
+        Navigation goes through A* + PathFollower rather than a straight
+        vector to the target, so drones actually route around the obstacle
+        instead of ignoring it.
+        """
         if d.assigned_task and d.assigned_task in self.tasks:
             target = self.tasks[d.assigned_task]["location"]
         else:
@@ -104,9 +125,30 @@ class Mission:
             d.velocity = [0.0, 0.0]
             return
 
-        # navigate using BELIEF, not truth - this is the honest bit
+        # Only replan when the target actually changes. Re-running A* every
+        # tick would be wasteful and pointless - the obstacle isn't moving.
+        target_key = tuple(round(v, 1) for v in target)
+        if (self._last_target.get(d.drone_id) != target_key
+                or self.follower.is_complete(d.drone_id)):
+            path = self.planners[d.drone_id].plan(list(d.belief_pos), list(target))
+            self.follower.set_path(d.drone_id, path if path else [target])
+            self._last_target[d.drone_id] = target_key
+
+        # update() both advances the waypoint index if we've arrived at the
+        # current one, AND returns the waypoint to steer toward. One call
+        # does both jobs - it needs the drone's true position because
+        # that's the physical thing actually arriving, not the belief.
+        waypoint = self.follower.update(d)
+        if waypoint is None:
+            d.velocity = [0.0, 0.0]
+            return
+
+        # navigate using BELIEF, not truth - this is the honest bit.
+        # The waypoint itself came from a plan built on belief_pos, so the
+        # steering direction is still entirely GPS-denial-honest even
+        # though PathFollower.update() checks arrival using true position.
         bx, by = d.belief_pos
-        dx, dy = target[0] - bx, target[1] - by
+        dx, dy = waypoint[0] - bx, waypoint[1] - by
         dist = math.hypot(dx, dy) or 1.0
         speed = min(3.0, dist)
         d.velocity = [dx / dist * speed, dy / dist * speed]
@@ -124,7 +166,7 @@ class Mission:
             d.search_target = None
 
     def perceive(self, d):
-        """Perception via adapter. Mock today, real YOLO tomorrow."""
+        """Perception via adapter. Real YOLOv8 when frames are mapped."""
         hit = self.perception.scan(d, self.survivors)
         if hit is None:
             return
@@ -137,6 +179,7 @@ class Mission:
             "frame": hit["frame"],
             "boxes": hit["boxes"],
         })
+
     def coverage(self):
         return 100.0 * (self.total_cells - len(self.unsearched)) / self.total_cells
 

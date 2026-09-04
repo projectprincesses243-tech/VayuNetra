@@ -21,6 +21,16 @@ class PerceptionAdapter:
         self.use_real = False
         self.stats = {"frames_examined": 0, "alerts": 0,
                       "uncertain": 0, "rejected": 0}
+        # Detector caches by filename. Same 100 photos every run means
+        # every seed sees identical results -> zero variance, useless
+        # evidence. Reset the cache per Mission so each experiment run
+        # genuinely re-evaluates instead of replaying old answers.
+        if use_real is None or use_real:
+            try:
+                from perception.detector import get_detector
+                get_detector().cache.clear()
+            except Exception:
+                pass
 
         # auto-detect: use the real detector if it loads AND frames exist
         if use_real is None:
