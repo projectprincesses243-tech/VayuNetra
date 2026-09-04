@@ -1,0 +1,879 @@
+/* =========================================================
+   VAYUNETRA
+   Drone Swarm Rescue Command Center
+   ========================================================= */
+
+/* ---------- RESET ---------- */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+}
+
+body {
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  background: #060912;
+  color: #f4f5ff;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+
+/* =========================================================
+   MAIN APP
+   ========================================================= */
+
+.app {
+  width: 100%;
+  min-height: 100vh;
+  background:
+    radial-gradient(
+      circle at 20% 20%,
+      rgba(92, 55, 190, 0.12),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 80% 80%,
+      rgba(20, 110, 170, 0.08),
+      transparent 30%
+    ),
+    #060912;
+}
+
+
+/* =========================================================
+   TOP NAVIGATION
+   ========================================================= */
+
+.topbar {
+  width: 100%;
+  height: 72px;
+
+  display: flex;
+  align-items: center;
+
+  padding: 0 28px;
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+  background: rgba(5, 8, 17, 0.94);
+
+  position: sticky;
+  top: 0;
+  z-index: 100;
+
+  backdrop-filter: blur(12px);
+}
+
+
+/* ---------- BRAND ---------- */
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  min-width: 240px;
+}
+
+.brand-logo {
+  width: 42px;
+  height: 42px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 12px;
+
+  background: linear-gradient(
+    135deg,
+    #7546ff,
+    #4f2bbd
+  );
+
+  color: white;
+
+  font-size: 22px;
+
+  box-shadow:
+    0 0 20px rgba(117, 70, 255, 0.35);
+}
+
+.brand h1 {
+  margin: 0;
+
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.brand p {
+  margin: 2px 0 0;
+
+  font-size: 10px;
+  color: #8d92aa;
+}
+
+
+/* ---------- NAVIGATION ---------- */
+
+.navigation {
+  flex: 1;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 6px;
+}
+
+.navigation a {
+  padding: 10px 14px;
+
+  border-radius: 9px;
+
+  color: #aeb3c7;
+
+  text-decoration: none;
+
+  font-size: 13px;
+  font-weight: 500;
+
+  transition: 0.2s ease;
+}
+
+.navigation a:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.navigation a.active {
+  color: white;
+
+  background: rgba(113, 63, 220, 0.18);
+
+  border: 1px solid rgba(135, 87, 255, 0.4);
+
+  box-shadow:
+    0 0 15px rgba(111, 60, 220, 0.12);
+}
+
+
+/* ---------- SYSTEM STATUS ---------- */
+
+.system-status {
+  min-width: 240px;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+
+  gap: 8px;
+
+  color: #7fe6ae;
+
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+
+  border-radius: 50%;
+
+  background: #25e67b;
+
+  box-shadow:
+    0 0 10px rgba(37, 230, 123, 0.8);
+}
+
+
+/* =========================================================
+   MAIN PAGE CONTAINER
+   ========================================================= */
+
+.dashboard {
+  width: 100%;
+  max-width: none;
+
+  min-height: calc(100vh - 72px);
+
+  margin: 0;
+
+  padding: 20px 28px 28px;
+
+  overflow-x: hidden;
+}
+
+
+/* =========================================================
+   HERO SECTION
+   ========================================================= */
+
+.hero-section {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding: 22px 26px;
+
+  margin-bottom: 14px;
+
+  border-radius: 16px;
+
+  border: 1px solid rgba(143, 102, 255, 0.24);
+
+  background:
+    linear-gradient(
+      110deg,
+      rgba(61, 28, 125, 0.32),
+      rgba(12, 20, 48, 0.62)
+    );
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.hero-section h2 {
+  margin: 5px 0 8px;
+
+  font-size: 34px;
+  line-height: 1.1;
+
+  letter-spacing: -1px;
+}
+
+.hero-section h2 span {
+  color: #a77aff;
+}
+
+.eyebrow {
+  margin: 0;
+
+  color: #a889ff;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 2px;
+}
+
+.hero-description {
+  margin: 0;
+
+  color: #969db5;
+
+  font-size: 13px;
+}
+
+
+/* =========================================================
+   STATUS BADGES
+   ========================================================= */
+
+.mission-status,
+.map-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+
+  white-space: nowrap;
+
+  padding: 9px 13px;
+
+  border-radius: 9px;
+
+  border: 1px solid rgba(255, 255, 255, 0.09);
+
+  background: rgba(255, 255, 255, 0.025);
+
+  color: #b8bdd0;
+
+  font-size: 10px;
+}
+
+
+/* =========================================================
+   DASHBOARD STAT CARDS
+   ========================================================= */
+
+.dashboard-grid {
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 14px;
+
+  margin-bottom: 14px;
+}
+
+.dashboard-card {
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+
+  gap: 13px;
+
+  padding: 16px;
+
+  min-height: 92px;
+
+  border-radius: 14px;
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(18, 23, 37, 0.95),
+      rgba(9, 13, 23, 0.96)
+    );
+}
+
+.dashboard-card p {
+  margin: 0 0 4px;
+
+  color: #8d94ad;
+
+  font-size: 9px;
+
+  letter-spacing: 1px;
+}
+
+.dashboard-card h3 {
+  margin: 0 0 3px;
+
+  font-size: 22px;
+}
+
+.dashboard-card span {
+  color: #727990;
+
+  font-size: 10px;
+}
+
+
+/* ---------- CARD ICON ---------- */
+
+.card-icon {
+  flex-shrink: 0;
+
+  width: 42px;
+  height: 42px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 11px;
+
+  background: rgba(103, 60, 200, 0.17);
+
+  border: 1px solid rgba(133, 90, 255, 0.16);
+
+  font-size: 19px;
+}
+
+
+/* =========================================================
+   OPERATION GRID
+   ========================================================= */
+
+.operation-grid {
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 2fr)
+    minmax(280px, 0.9fr);
+
+  gap: 14px;
+
+  margin-bottom: 14px;
+}
+
+
+/* =========================================================
+   PANELS
+   ========================================================= */
+
+.map-panel {
+  width: 100%;
+
+  min-width: 0;
+
+  border-radius: 15px;
+
+  overflow: hidden;
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(13, 18, 30, 0.98),
+      rgba(7, 11, 20, 0.98)
+    );
+}
+
+
+/* ---------- PANEL HEADER ---------- */
+
+.panel-header {
+  min-height: 58px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 10px 16px;
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.panel-header p {
+  margin: 0 0 3px;
+
+  color: #8990a7;
+
+  font-size: 9px;
+
+  letter-spacing: 1.4px;
+}
+
+.panel-header h3 {
+  margin: 0;
+
+  font-size: 16px;
+}
+
+
+/* =========================================================
+   MAP AREA
+   ========================================================= */
+
+.map-placeholder {
+  position: relative;
+
+  width: 100%;
+
+  min-height: 280px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+
+  background-color: #080d16;
+
+  background-image:
+    linear-gradient(
+      rgba(80, 95, 125, 0.09) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(80, 95, 125, 0.09) 1px,
+      transparent 1px
+    );
+
+  background-size: 36px 36px;
+}
+
+.map-placeholder::before {
+  content: "";
+
+  position: absolute;
+
+  width: 280px;
+  height: 280px;
+
+  border-radius: 50%;
+
+  border: 1px solid rgba(125, 83, 240, 0.28);
+
+  box-shadow:
+    0 0 0 70px rgba(100, 60, 200, 0.025),
+    0 0 0 140px rgba(100, 60, 200, 0.018);
+}
+
+.map-message {
+  position: relative;
+  z-index: 2;
+
+  text-align: center;
+
+  max-width: 400px;
+}
+
+.map-pin {
+  margin-bottom: 10px;
+
+  font-size: 24px;
+}
+
+.map-message h3 {
+  margin: 0 0 7px;
+
+  font-size: 16px;
+}
+
+.map-message p {
+  margin: 0;
+
+  color: #777f98;
+
+  font-size: 11px;
+
+  line-height: 1.5;
+}
+
+
+/* =========================================================
+   ACTION ITEMS
+   ========================================================= */
+
+.action-item {
+  display: flex;
+  align-items: flex-start;
+
+  gap: 10px;
+
+  padding: 13px 15px;
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.action-item:last-child {
+  border-bottom: none;
+}
+
+.action-item strong {
+  display: block;
+
+  margin-bottom: 3px;
+
+  font-size: 12px;
+}
+
+.action-item p {
+  margin: 0;
+
+  color: #727a91;
+
+  font-size: 10px;
+}
+
+.action-indicator {
+  flex-shrink: 0;
+
+  width: 7px;
+  height: 7px;
+
+  margin-top: 5px;
+
+  border-radius: 50%;
+
+  background: #27df82;
+
+  box-shadow:
+    0 0 8px rgba(39, 223, 130, 0.6);
+}
+
+.action-indicator.waiting {
+  background: #e8a929;
+
+  box-shadow:
+    0 0 8px rgba(232, 169, 41, 0.5);
+}
+
+
+/* =========================================================
+   MISSION FLOW
+   ========================================================= */
+
+.mission-flow {
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(5, minmax(0, 1fr));
+
+  gap: 10px;
+
+  padding: 16px;
+}
+
+.mission-step {
+  min-height: 100px;
+
+  padding: 14px;
+
+  border-radius: 11px;
+
+  border: 1px solid rgba(255, 255, 255, 0.07);
+
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.mission-step-number {
+  color: #9470ff;
+
+  font-size: 9px;
+
+  margin-bottom: 12px;
+}
+
+.mission-step h3 {
+  margin: 0 0 6px;
+
+  font-size: 14px;
+}
+
+.mission-step p {
+  margin: 0;
+
+  color: #717991;
+
+  font-size: 10px;
+
+  line-height: 1.4;
+}
+
+
+/* =========================================================
+   DEPLOYMENT CARDS
+   ========================================================= */
+
+.operation-grid > .dashboard-card {
+  min-height: 110px;
+}
+
+
+/* =========================================================
+   TABLES / DATA
+   ========================================================= */
+
+table {
+  width: 100%;
+
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 11px 14px;
+
+  text-align: left;
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+
+  font-size: 11px;
+}
+
+th {
+  color: #858da5;
+
+  font-size: 9px;
+
+  letter-spacing: 1px;
+}
+
+td {
+  color: #c3c7d6;
+}
+
+
+/* =========================================================
+   INPUTS
+   ========================================================= */
+
+input,
+select,
+textarea {
+  width: 100%;
+
+  padding: 10px 12px;
+
+  border-radius: 8px;
+
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  outline: none;
+
+  background: #0b101b;
+
+  color: white;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(139, 92, 246, 0.7);
+
+  box-shadow:
+    0 0 0 2px rgba(139, 92, 246, 0.1);
+}
+
+
+/* =========================================================
+   BUTTONS
+   ========================================================= */
+
+button {
+  border: none;
+
+  cursor: pointer;
+
+  border-radius: 8px;
+
+  padding: 9px 14px;
+
+  background: #7044db;
+
+  color: white;
+
+  font-weight: 600;
+
+  transition: 0.2s ease;
+}
+
+button:hover {
+  background: #8155ec;
+
+  transform: translateY(-1px);
+}
+
+
+/* =========================================================
+   SCROLLBAR
+   ========================================================= */
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: #060912;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #292d3d;
+
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3b4054;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 1100px) {
+
+  .brand {
+    min-width: auto;
+  }
+
+  .system-status {
+    min-width: auto;
+  }
+
+  .dashboard-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .operation-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+@media (max-width: 800px) {
+
+  .topbar {
+    height: auto;
+
+    min-height: 72px;
+
+    flex-wrap: wrap;
+
+    padding: 12px 16px;
+
+    gap: 10px;
+  }
+
+  .brand {
+    flex: 1;
+  }
+
+  .navigation {
+    order: 3;
+
+    width: 100%;
+
+    justify-content: flex-start;
+
+    overflow-x: auto;
+  }
+
+  .system-status {
+    display: none;
+  }
+
+  .dashboard {
+    padding: 14px 16px 20px;
+  }
+
+  .hero-section {
+    align-items: flex-start;
+
+    flex-direction: column;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mission-flow {
+    grid-template-columns: 1fr;
+  }
+}
