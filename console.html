@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VAYUNETRA · MISSION CONSOLE</title>
+<style>
+:root{
+  --bg:#070B0F; --panel:#0D141B; --raised:#131D26; --border:#1E2C38;
+  --grid:#152029; --hi:#E8F0F6; --mid:#7D95A8; --lo:#435666;
+  --cyan:#00D4E0; --blue:#4A9EFF; --amber:#FFB020; --red:#FF4757;
+  --green:#00E58A; --orange:#FF8A3D; --ghost:#2E4152;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--hi); height:100vh; overflow:hidden;
+  font-family:"Segoe UI",Roboto,system-ui,sans-serif; font-size:13px;
+}
+.mono{font-family:Consolas,"SF Mono","Roboto Mono",monospace;
+      font-variant-numeric:tabular-nums}
+
+/* ---------- layout ---------- */
+#app{display:grid;grid-template-rows:44px 1fr 132px;height:100vh}
+#body{display:grid;grid-template-columns:250px 1fr 288px;overflow:hidden}
+
+/* ---------- top bar ---------- */
+#top{
+  display:flex;align-items:center;gap:22px;padding:0 16px;
+  background:var(--panel);border-bottom:1px solid var(--border)
+}
+#brand{font-weight:600;letter-spacing:3px;font-size:14px}
+#brand span{color:var(--cyan)}
+.tag{
+  font-size:9px;letter-spacing:1.4px;color:var(--lo);
+  border:1px solid var(--border);padding:2px 7px;border-radius:2px
+}
+.stat{display:flex;flex-direction:column;line-height:1.15}
+.stat .k{font-size:8.5px;letter-spacing:1.3px;color:var(--lo)}
+.stat .v{font-size:16px;font-weight:600}
+#link{margin-left:auto;display:flex;align-items:center;gap:7px;
+      font-size:10px;letter-spacing:1.2px;color:var(--mid)}
+#dot{width:7px;height:7px;border-radius:50%;background:var(--red)}
+#dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
+
+/* ---------- panels ---------- */
+.panel{background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
+#left{border-right:1px solid var(--border)}
+#right{border-left:1px solid var(--border)}
+.head{
+  padding:8px 12px;font-size:9px;letter-spacing:1.6px;color:var(--mid);
+  border-bottom:1px solid var(--border);display:flex;
+  justify-content:space-between;align-items:center;flex-shrink:0
+}
+.head b{color:var(--cyan);font-weight:600}
+.scroll{overflow-y:auto;flex:1}
+.scroll::-webkit-scrollbar{width:5px}
+.scroll::-webkit-scrollbar-thumb{background:var(--border)}
+
+/* ---------- drone cards ---------- */
+.dr{padding:8px 12px;border-bottom:1px solid var(--grid);cursor:pointer}
+.dr:hover{background:var(--raised)}
+.dr.sel{background:var(--raised);box-shadow:inset 2px 0 0 var(--cyan)}
+.dr.dead{opacity:.34}
+.dr .r1{display:flex;justify-content:space-between;align-items:center}
+.dr .id{font-size:12px;font-weight:600;letter-spacing:.8px}
+.dr .st{font-size:8px;letter-spacing:1px;padding:1px 6px;border-radius:2px}
+.bar{height:2px;background:var(--grid);margin-top:5px;border-radius:1px}
+.bar i{display:block;height:100%;border-radius:1px;transition:width .3s}
+.dr .r2{display:flex;justify-content:space-between;margin-top:5px;
+        font-size:9.5px;color:var(--mid)}
+
+/* ---------- map ---------- */
+#mapwrap{position:relative;background:var(--bg);overflow:hidden}
+#map{display:block;width:100%;height:100%}
+#legend{
+  position:absolute;left:12px;bottom:12px;background:rgba(13,20,27,.92);
+  border:1px solid var(--border);padding:8px 11px;font-size:9px;
+  color:var(--mid);line-height:1.85;border-radius:2px
+}
+#legend i{display:inline-block;width:8px;height:8px;margin-right:6px;
+          vertical-align:-1px;border-radius:50%}
+#gpsflag{
+  position:absolute;top:12px;left:50%;transform:translateX(-50%);
+  background:rgba(255,71,87,.14);border:1px solid var(--red);color:var(--red);
+  padding:5px 16px;font-size:10px;letter-spacing:2.4px;border-radius:2px;
+  display:none
+}
+#gpsflag.on{display:block;animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.42}}
+#coord{position:absolute;right:12px;bottom:12px;font-size:9.5px;
+       color:var(--lo);letter-spacing:.6px}
+
+/* ---------- right rail ---------- */
+.sect{border-bottom:1px solid var(--border);flex-shrink:0}
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border)}
+.met{background:var(--panel);padding:8px 11px}
+.met .k{font-size:8px;letter-spacing:1.1px;color:var(--lo)}
+.met .v{font-size:17px;font-weight:600;margin-top:2px}
+#spark{display:block;width:100%;height:52px}
+.bidrow{display:flex;align-items:center;gap:8px;padding:4px 12px;font-size:10px}
+.bidrow .n{width:26px;color:var(--mid)}
+.bidbar{flex:1;height:3px;background:var(--grid);border-radius:2px}
+.bidbar i{display:block;height:100%;background:var(--blue);border-radius:2px;
+          transition:width .25s}
+.bidrow .c{width:44px;text-align:right;color:var(--hi)}
+.bidrow.win .c{color:var(--green)}
+.bidrow.win .bidbar i{background:var(--green)}
+
+/* ---------- controls ---------- */
+#ctl{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border)}
+.btn{
+  background:var(--raised);border:0;color:var(--mid);padding:11px 6px;
+  font-size:9.5px;letter-spacing:1.2px;cursor:pointer;font-family:inherit
+}
+.btn:hover{background:#1A2833;color:var(--hi)}
+.btn.hot{color:var(--red)}
+.btn.act{background:rgba(255,71,87,.14);color:var(--red)}
+.btn.wide{grid-column:span 2}
+
+/* ---------- event log ---------- */
+#log{background:var(--panel);border-top:1px solid var(--border);
+     display:flex;flex-direction:column;overflow:hidden}
+#logrows{overflow-y:auto;flex:1;padding:2px 0}
+#logrows::-webkit-scrollbar{width:5px}
+#logrows::-webkit-scrollbar-thumb{background:var(--border)}
+.ev{display:flex;gap:12px;padding:2px 14px;font-size:10.5px;line-height:1.6}
+.ev .t{color:var(--lo);width:52px;flex-shrink:0}
+.ev .n{width:168px;flex-shrink:0;letter-spacing:.5px}
+.ev .d{color:var(--mid);flex:1;overflow:hidden;text-overflow:ellipsis;
+       white-space:nowrap}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="top">
+    <div id="brand">VAYU<span>NETRA</span></div>
+    <div class="tag">MISSION CONSOLE</div>
+    <div class="stat"><div class="k">ELAPSED</div>
+      <div class="v mono" id="s-tick">—</div></div>
+    <div class="stat"><div class="k">COVERAGE</div>
+      <div class="v mono" id="s-cov" style="color:var(--cyan)">—</div></div>
+    <div class="stat"><div class="k">LOCATED</div>
+      <div class="v mono" id="s-res" style="color:var(--green)">—</div></div>
+    <div class="stat"><div class="k">POS ERROR</div>
+      <div class="v mono" id="s-err" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="k">ACTIVE</div>
+      <div class="v mono" id="s-act">—</div></div>
+    <div id="link"><div id="dot"></div><span id="linktxt">OFFLINE</span></div>
+  </div>
+
+  <div id="body">
+
+    <div class="panel" id="left">
+      <div class="head"><span>SWARM</span><b id="cnt">0</b></div>
+      <div class="scroll" id="drones"></div>
+    </div>
+
+    <div id="mapwrap">
+      <canvas id="map"></canvas>
+      <div id="gpsflag">◆ GPS DENIED — DEAD RECKONING ONLY</div>
+      <div id="legend">
+        <div><i style="background:var(--cyan)"></i>believed position</div>
+        <div><i style="background:var(--ghost)"></i>true position</div>
+        <div><i style="background:var(--orange)"></i>survivor</div>
+        <div><i style="background:var(--green)"></i>located</div>
+        <div><i style="background:var(--amber)"></i>ground beacon</div>
+      </div>
+      <div id="coord" class="mono">—</div>
+    </div>
+
+    <div class="panel" id="right">
+      <div class="sect">
+        <div class="head"><span>LOCALIZATION ERROR</span>
+          <b id="errnow" class="mono">—</b></div>
+        <canvas id="spark"></canvas>
+      </div>
+      <div class="sect">
+        <div class="head"><span>ACTIVE AUCTION</span><b id="aucid">IDLE</b></div>
+        <div id="bids" style="padding:4px 0 8px"></div>
+      </div>
+      <div class="sect">
+        <div class="head"><span>MISSION METRICS</span></div>
+        <div class="metrics">
+          <div class="met"><div class="k">AUCTIONS</div>
+            <div class="v mono" id="m-auc">—</div></div>
+          <div class="met"><div class="k">BIDS SENT</div>
+            <div class="v mono" id="m-bid">—</div></div>
+          <div class="met"><div class="k">DETECTED</div>
+            <div class="v mono" id="m-det">—</div></div>
+          <div class="met"><div class="k">UNITS LOST</div>
+            <div class="v mono" id="m-lost">—</div></div>
+        </div>
+      </div>
+      <div class="head" style="border-top:1px solid var(--border)">
+        <span>MISSION CONTROL</span></div>
+      <div id="ctl">
+        <button class="btn" id="b-gps">DENY GPS</button>
+        <button class="btn hot" id="b-kill">DISABLE UNIT</button>
+        <button class="btn wide" id="b-reset">RESET MISSION</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="log">
+    <div class="head"><span>EVENT LOG</span><b id="evn">0</b></div>
+    <div id="logrows"></div>
+  </div>
+
+</div>
+
+<script>
+const API = "http://127.0.0.1:8000";
+const WS  = "ws://127.0.0.1:8000/ws";
+
+const C = {
+  SEARCHING:"#00D4E0", ENROUTE:"#4A9EFF", RESCUING:"#00E58A",
+  RETURNING:"#FFB020", DEAD:"#FF4757"
+};
+
+let S = null;          // latest snapshot
+let sel = null;        // selected drone id
+let errHist = [];      // localization error history
+let rangingOn = true;
+
+const $ = id => document.getElementById(id);
+const cv = $("map"), cx = cv.getContext("2d");
+const sp = $("spark"), spx = sp.getContext("2d");
+
+/* ---------------------------------------------------------- connection */
+function connect(){
+  const ws = new WebSocket(WS);
+  ws.onopen = () => {
+    $("dot").classList.add("on");
+    $("linktxt").textContent = "TELEMETRY LIVE";
+  };
+  ws.onmessage = e => { S = JSON.parse(e.data); render(); };
+  ws.onclose = () => {
+    $("dot").classList.remove("on");
+    $("linktxt").textContent = "OFFLINE";
+    setTimeout(connect, 1500);           // reconnect automatically
+  };
+  ws.onerror = () => ws.close();
+}
+
+/* ------------------------------------------------------------- sizing */
+function fit(){
+  const w = cv.parentElement.clientWidth, h = cv.parentElement.clientHeight;
+  const d = window.devicePixelRatio || 1;
+  cv.width = w*d; cv.height = h*d; cx.setTransform(d,0,0,d,0,0);
+  sp.width = sp.clientWidth*d; sp.height = 52*d; spx.setTransform(d,0,0,d,0,0);
+  if(S) render();
+}
+window.addEventListener("resize", fit);
+
+/* ---------------------------------------------------------- map maths */
+function view(){
+  const w = cv.clientWidth, h = cv.clientHeight;
+  const size = S.world.size, pad = 34;
+  const s = Math.min(w-pad*2, h-pad*2) / size;
+  return {s, ox:(w - size*s)/2, oy:(h - size*s)/2, size};
+}
+const P = (v,p) => ({x: p.ox + v[0]*p.s, y: p.oy + v[1]*p.s});
+
+/* -------------------------------------------------------------- draw */
+function drawMap(){
+  const w = cv.clientWidth, h = cv.clientHeight;
+  cx.clearRect(0,0,w,h);
+  if(!S) return;
+  const p = view(), cell = S.world.cell || 50;
+
+  /* mission boundary */
+  cx.strokeStyle = "#1E2C38"; cx.lineWidth = 1;
+  cx.strokeRect(p.ox, p.oy, p.size*p.s, p.size*p.s);
+
+  /* grid */
+  cx.strokeStyle = "#111C24"; cx.lineWidth = .5;
+  for(let g=0; g<=p.size; g+=cell){
+    const a = P([g,0],p), b = P([g,p.size],p);
+    cx.beginPath(); cx.moveTo(a.x,a.y); cx.lineTo(b.x,b.y); cx.stroke();
+    const c = P([0,g],p), d = P([p.size,g],p);
+    cx.beginPath(); cx.moveTo(c.x,c.y); cx.lineTo(d.x,d.y); cx.stroke();
+  }
+
+  /* swept coverage */
+  if(S.searched_cells){
+    cx.fillStyle = "rgba(0,212,224,0.055)";
+    const px = cell*p.s;
+    S.searched_cells.forEach(c=>{
+      const q = P([c[0]-cell/2, c[1]-cell/2], p);
+      cx.fillRect(q.x, q.y, px, px);
+    });
+  }
+
+  /* ground beacons */
+  (S.world.anchors||[]).forEach(a=>{
+    const q = P(a,p);
+    cx.strokeStyle = "#FFB020"; cx.lineWidth = 1.4;
+    cx.beginPath(); cx.moveTo(q.x-5,q.y); cx.lineTo(q.x,q.y-5);
+    cx.lineTo(q.x+5,q.y); cx.lineTo(q.x,q.y+5); cx.closePath(); cx.stroke();
+  });
+
+  /* radio links between units in range */
+  const alive = S.drones.filter(d=>d.alive);
+  cx.strokeStyle = "rgba(74,158,255,0.13)"; cx.lineWidth = .7;
+  for(let i=0;i<alive.length;i++)
+    for(let j=i+1;j<alive.length;j++){
+      const a=alive[i].belief_pos, b=alive[j].belief_pos;
+      if(Math.hypot(a[0]-b[0], a[1]-b[1]) > 160) continue;
+      const q1=P(a,p), q2=P(b,p);
+      cx.beginPath(); cx.moveTo(q1.x,q1.y); cx.lineTo(q2.x,q2.y); cx.stroke();
+    }
+
+  /* survivors */
+  S.survivors.forEach(s=>{
+    const q = P(s.pos,p);
+    const col = s.rescued ? "#00E58A" : (s.found ? "#FFB020" : "#FF8A3D");
+    if(!s.found){                                    // pulsing ring if unfound
+      const r = 8 + Math.sin(Date.now()/380)*3;
+      cx.strokeStyle = "rgba(255,138,61,0.32)"; cx.lineWidth = 1;
+      cx.beginPath(); cx.arc(q.x,q.y,r,0,6.283); cx.stroke();
+    }
+    cx.fillStyle = col;
+    cx.beginPath(); cx.arc(q.x,q.y,3.4,0,6.283); cx.fill();
+  });
+
+  /* drones */
+  S.drones.forEach(d=>{
+    const t = P(d.true_pos,p), b = P(d.belief_pos,p);
+    const col = C[d.state] || "#7D95A8";
+
+    if(!d.alive){
+      cx.strokeStyle = "#FF4757"; cx.lineWidth = 1.2;
+      cx.beginPath();
+      cx.moveTo(b.x-5,b.y-5); cx.lineTo(b.x+5,b.y+5);
+      cx.moveTo(b.x+5,b.y-5); cx.lineTo(b.x-5,b.y+5);
+      cx.stroke();
+      cx.fillStyle="#FF4757"; cx.font="8px Consolas";
+      cx.fillText("D"+d.id, b.x+8, b.y+3);
+      return;
+    }
+
+    /* ghost - where it really is */
+    cx.strokeStyle = "#2E4152"; cx.lineWidth = 1;
+    cx.beginPath(); cx.arc(t.x,t.y,5,0,6.283); cx.stroke();
+
+    /* tether between truth and belief */
+    cx.setLineDash([2,3]); cx.strokeStyle = "#2E4152";
+    cx.beginPath(); cx.moveTo(t.x,t.y); cx.lineTo(b.x,b.y); cx.stroke();
+    cx.setLineDash([]);
+
+    /* uncertainty */
+    if(d.uncertainty > 0.5){
+      cx.strokeStyle = "rgba(0,212,224,0.16)";
+      cx.beginPath(); cx.arc(b.x,b.y,d.uncertainty*p.s,0,6.283); cx.stroke();
+    }
+
+    /* sensor sweep */
+    cx.strokeStyle = "rgba(0,212,224,0.09)";
+    cx.beginPath(); cx.arc(b.x,b.y,40*p.s,0,6.283); cx.stroke();
+
+    /* the unit itself */
+    if(sel === d.id){
+      cx.strokeStyle = col; cx.lineWidth = 1;
+      cx.strokeRect(b.x-9,b.y-9,18,18);
+    }
+    cx.fillStyle = col;
+    cx.beginPath(); cx.arc(b.x,b.y,4.2,0,6.283); cx.fill();
+    cx.fillStyle = "#7D95A8"; cx.font = "8px Consolas";
+    cx.fillText("D"+d.id, b.x+7, b.y-6);
+
+    /* line to its target */
+    if(d.search_target){
+      const g = P(d.search_target,p);
+      cx.setLineDash([1,4]); cx.strokeStyle = "rgba(0,212,224,0.20)";
+      cx.beginPath(); cx.moveTo(b.x,b.y); cx.lineTo(g.x,g.y); cx.stroke();
+      cx.setLineDash([]);
+    }
+  });
+}
+
+function drawSpark(){
+  const w = sp.clientWidth, h = 52;
+  spx.clearRect(0,0,w,h);
+  if(errHist.length < 2) return;
+  const max = Math.max(8, ...errHist);
+
+  spx.strokeStyle = "#152029"; spx.lineWidth = .5;
+  [0.25,0.5,0.75].forEach(f=>{
+    spx.beginPath(); spx.moveTo(0,h*f); spx.lineTo(w,h*f); spx.stroke();
+  });
+
+  spx.beginPath();
+  errHist.forEach((v,i)=>{
+    const x = i/(errHist.length-1)*w, y = h - (v/max)*(h-6) - 3;
+    i ? spx.lineTo(x,y) : spx.moveTo(x,y);
+  });
+  spx.strokeStyle = "#FFB020"; spx.lineWidth = 1.3; spx.stroke();
+
+  spx.lineTo(w,h); spx.lineTo(0,h); spx.closePath();
+  spx.fillStyle = "rgba(255,176,32,0.09)"; spx.fill();
+
+  spx.fillStyle = "#435666"; spx.font = "8px Consolas";
+  spx.fillText(max.toFixed(1)+"m", 3, 9);
+}
+
+/* --------------------------------------------------------- rendering */
+function render(){
+  if(!S) return;
+  const m = S.metrics, alive = S.drones.filter(d=>d.alive).length;
+
+  $("s-tick").textContent = "T+" + String(S.tick).padStart(4,"0");
+  $("s-cov").textContent  = m.coverage.toFixed(0) + "%";
+  $("s-res").textContent  = m.rescued + "/" + m.total;
+  $("s-err").textContent  = m.mean_error.toFixed(2) + "m";
+  $("s-act").textContent  = alive + "/" + S.drones.length;
+  $("cnt").textContent    = alive + " ACTIVE";
+  $("m-auc").textContent  = m.auctions;
+  $("m-bid").textContent  = m.bids;
+  $("m-det").textContent  = (m.detected !== undefined ? m.detected : "—");
+  $("m-lost").textContent = m.lost;
+  $("errnow").textContent = m.mean_error.toFixed(2) + " m";
+
+  errHist.push(m.mean_error);
+  if(errHist.length > 190) errHist.shift();
+
+  $("gpsflag").classList.toggle("on", S.ranging_on === false);
+
+  /* swarm rail */
+  $("drones").innerHTML = S.drones.map(d=>{
+    const col = C[d.state] || "#7D95A8";
+    const bc  = d.battery > 50 ? "#00E58A" : d.battery > 20 ? "#FFB020" : "#FF4757";
+    return `<div class="dr ${d.alive?"":"dead"} ${sel===d.id?"sel":""}"
+                 onclick="pick(${d.id})">
+      <div class="r1">
+        <span class="id">UNIT ${String(d.id).padStart(2,"0")}</span>
+        <span class="st" style="background:${col}1F;color:${col}">${d.state}</span>
+      </div>
+      <div class="bar"><i style="width:${d.battery}%;background:${bc}"></i></div>
+      <div class="r2 mono">
+        <span>${d.battery.toFixed(0)}%</span>
+        <span>±${d.error.toFixed(1)}m</span>
+        <span>${d.assigned_task || "—"}</span>
+      </div>
+    </div>`;
+  }).join("");
+
+  /* auction */
+  const a = (S.open_auctions || [])[0];
+  if(a && a.bids.length){
+    $("aucid").textContent = a.task_id;
+    const max = Math.max(...a.bids.map(b=>b.cost));
+    $("bids").innerHTML = a.bids.map((b,i)=>`
+      <div class="bidrow ${i===0?"win":""}">
+        <span class="n mono">D${b.drone_id}</span>
+        <span class="bidbar"><i style="width:${(b.cost/max*100).toFixed(0)}%"></i></span>
+        <span class="c mono">${b.cost.toFixed(0)}</span>
+      </div>`).join("");
+  } else {
+    $("aucid").textContent = "IDLE";
+    $("bids").innerHTML =
+      `<div style="padding:14px 12px;font-size:10px;color:var(--lo)">
+         no active call for proposals</div>`;
+  }
+
+  /* event log */
+  const ev = (S.events || []).slice().reverse();
+  $("evn").textContent = (S.events || []).length;
+  $("logrows").innerHTML = ev.map(e=>{
+    const col = e.event.includes("DIED")   ? "#FF4757"
+              : e.event.includes("SURVIVOR")? "#FF8A3D"
+              : e.event.includes("AWARDED") ? "#00E58A"
+              : e.event.includes("BID")     ? "#4A9EFF" : "#7D95A8";
+    const p = e.payload || {};
+    const d = Object.keys(p).slice(0,4)
+                .map(k=>`${k}=${JSON.stringify(p[k])}`).join("  ");
+    return `<div class="ev mono">
+      <span class="t">T+${String(e.tick).padStart(4,"0")}</span>
+      <span class="n" style="color:${col}">${e.event}</span>
+      <span class="d">${d}</span></div>`;
+  }).join("");
+
+  drawMap(); drawSpark();
+}
+
+/* ---------------------------------------------------------- controls */
+function pick(id){ sel = (sel === id ? null : id); render(); }
+const post = (p,q="") => fetch(API+p+q,{method:"POST"}).catch(()=>{});
+
+$("b-gps").onclick = () => {
+  rangingOn = !rangingOn;
+  post("/api/ranging/" + rangingOn);
+  $("b-gps").classList.toggle("act", !rangingOn);
+  $("b-gps").textContent = rangingOn ? "DENY GPS" : "RESTORE GPS";
+};
+$("b-kill").onclick  = () => post("/api/kill", sel!==null ? "?drone_id="+sel : "");
+$("b-reset").onclick = () => {
+  errHist = []; rangingOn = true;
+  $("b-gps").classList.remove("act");
+  $("b-gps").textContent = "DENY GPS";
+  post("/api/reset");
+};
+
+/* mouse readout in world coordinates */
+cv.addEventListener("mousemove", e=>{
+  if(!S) return;
+  const r = cv.getBoundingClientRect(), p = view();
+  const x = (e.clientX - r.left - p.ox)/p.s, y = (e.clientY - r.top - p.oy)/p.s;
+  $("coord").textContent =
+    (x>=0 && y>=0 && x<=p.size && y<=p.size)
+      ? `X ${x.toFixed(0)}   Y ${y.toFixed(0)}` : "—";
+});
+
+fit();
+connect();
+setInterval(()=>{ if(S) drawMap(); }, 100);   // keeps the pulses animating
+</script>
+</body>
+</html>
