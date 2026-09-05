@@ -96,7 +96,19 @@ class Mission:
         tid = f"T{p['survivor_id']:03d}"
         if tid in self.tasks:
             return
-        task = make_task(tid, p["location"][0], p["location"][1], p["confidence"])
+        task = make_task(
+            tid,
+            p["location"][0],
+            p["location"][1],
+            p["confidence"]
+        )
+
+        # Attach disaster intelligence if available.
+        # Existing task allocation remains unchanged.
+        if self.scenario:
+            task["hazard"] = self.scenario.hazard
+            task["severity"] = self.scenario.severity
+            task["priority"] = self.scenario.priority
         self.tasks[tid] = task
         self.net.issue_cfp(task)
 
@@ -282,6 +294,12 @@ class Mission:
         return {
             "tick": BUS.tick,
             "complete": self.complete,
+            "scenario": (
+                self.scenario.to_dict()
+                if self.scenario
+                else None
+            ),
+
             "world": {"size": SIZE, "anchors": ANCHORS, "cell": CELL},
             "ranging_on": self.bridge.localizers[self.drones[0].drone_id].ranging_on,
             "searched_cells": [self.cell_centre(c)
