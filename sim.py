@@ -1,4 +1,4 @@
-"""VayuNetra integrated simulation. Everything running in one loop."""
+﻿"""VayuNetra integrated simulation. Everything running in one loop."""
 
 import sys, math, random, argparse
 sys.path.insert(0, ".")
@@ -22,7 +22,14 @@ RESCUE_RADIUS = 20.0
 
 
 class Mission:
-    def __init__(self, n_drones=6, n_survivors=5, seed=42, ranging_on=True):
+    def __init__(
+        self,
+        n_drones=6,
+        n_survivors=5,
+        seed=42,
+        ranging_on=True,
+        scenario=None
+    ):
         random.seed(seed)
         self.drones = []
         for i in range(n_drones):
@@ -49,6 +56,17 @@ class Mission:
         self.tasks = {}
         self.complete = False
 
+        # Optional pre-disaster intelligence input.
+        # Keeps simulation backward compatible.
+        self.scenario = scenario
+
+        if self.scenario:
+            print(
+                f"[scenario] {self.scenario.hazard} | "
+                f"severity={self.scenario.severity} | "
+                f"priority={self.scenario.priority}"
+                )
+       
         # Real obstacle-aware navigation. Environment matches this mission's
         # actual world size (500x500) rather than config.py's defaults, so
         # A* plans against the same space drones actually move in.

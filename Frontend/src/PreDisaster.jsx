@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-const API_URL = "http://localhost:8000/api/alerts";
+const API_URL = "http://localhost:8001/api/alerts";
 
 function PreDisaster() {
   const [alerts, setAlerts] = useState([]);
