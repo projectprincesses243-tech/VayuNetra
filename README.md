@@ -6,6 +6,10 @@ Smart Horizon 2026 — 48-Hour International Hackathon
 New Horizon College of Engineering, Bengaluru
 Team ID `SHIH26-TID-504` · Problem Statement `SH-DST-05`
 
+![Complete hardware setup integrated with the digital twin](Docs/Images/Complete%20Hardware%20Setup%20integrated%20with%20digital%20twin.jpeg)
+
+*The full bench during the hackathon. Left: the digital twin running its mission console. Right: Mission Planner with ArduPilot. Foreground: Raspberry Pi 4, STM32F407G-DISC1, and three ESP32 mesh nodes with an I²C status display.*
+
 ---
 
 ## What this project is
@@ -16,7 +20,7 @@ VayuNetra is the software layer that solves that second problem. We do not build
 
 The system is developed as a **digital twin** — a complete software replica of the swarm, in which the coordination logic is written exactly as it would be for real flight hardware, and the communication layer is swappable. This allows the decision-making to be tested, broken deliberately, and measured before any hardware is risked.
 
-The twin is not confined to a laptop. It runs on a Raspberry Pi 4 acting as the edge gateway, receiving MAVLink telemetry from an STM32F407G-DISC1 over USB-TTL, and ingesting live government disaster alerts from the NDMA SACHET feed. Real data enters from both ends.
+The twin is not confined to a laptop. It runs on a Raspberry Pi 4 acting as the edge gateway, receiving MAVLink telemetry from an STM32F407G-DISC1 over serial, and ingesting live government disaster alerts from the NDMA SACHET feed. Real data enters from both ends.
 
 ---
 
@@ -38,7 +42,7 @@ The twin is not confined to a laptop. It runs on a Raspberry Pi 4 acting as the 
             |                                  |
    normalize, dedupe, store           STM32F407G-DISC1 (MAVLink)
             |                                  |
-   disaster scenario                   USB-TTL serial
+   disaster scenario                   serial link
             \                                  /
              \                                /
               RASPBERRY PI 4 — EDGE GATEWAY
@@ -89,6 +93,7 @@ pre_disaster/        NDMA SACHET alert service (standalone, port 8001)
 server/              FastAPI live-state server with WebSocket
 firmware/            ESP32 ESP-NOW mesh nodes and STM32 MAVLink sketch
 Frontend/            React mission dashboard
+Docs/Images/         hardware and deployment photographs
 tools/               frame mapping, detector tests, demo scripts
 console.html         standalone mission console, no build step
 sim.py               integrated mission loop
@@ -198,7 +203,7 @@ Evaluated across 1,417 real disaster-scene images spanning six categories (colla
 - Range measurements use Gaussian noise calibrated to published UWB accuracy (~10 cm). They are modelled, not measured from hardware.
 - Dead-reckoning drift is modelled as fixed per-drone bias plus a random walk. Magnitudes are tuned, not taken from a specific IMU.
 - Perception in the swarm experiment runs a proximity model, not YOLO inference. Detector accuracy is measured separately, above.
-- All drones run in one process, so bids do not yet cross a physical radio.
+- All drones in the twin run in one process, so bids do not yet cross a physical radio.
 
 ---
 
@@ -213,20 +218,46 @@ The same coordination code runs unmodified on a Raspberry Pi 4, which is the cla
         |
   STM32F407G-DISC1                flight controller interface
         |
-        | USB-TTL serial
+        | serial
         |
   RASPBERRY PI 4                  digital twin host, perception, dashboard
         |
   ESP32 x3                        swarm mesh radio (ESP-NOW)
 ```
 
-**Verified:**
+### Live telemetry on the Raspberry Pi
+
+![VayuNetra mission console running on the Raspberry Pi](Docs/Images/Dashboard%20Console.jpeg)
+
+*The mission console with a live MAVLink link. 18,407 messages received and forwarded, STM32F407 reported connected on the hardware bus, and navigation, attitude, motion, power and link-health panels populated from real telemetry rather than placeholder values.*
+
+![Raspberry Pi 4 alongside the running console](Docs/Images/Dashboard%20Console%20with%20Raspberry%20Pi.jpeg)
+
+*The same console with the Pi 4 in frame. The twin runs on the Pi itself, reached over a Wi-Fi hotspot and SSH — no laptop is required for the mission to continue.*
+
+### Flight controller interface
+
+![Mission Planner connected to the STM32F407G-DISC1](Docs/Images/Mission%20Planner%20with%20STM32.jpeg)
+
+*ArduPilot Mission Planner tracking the vehicle over a live MAVLink connection, with the STM32F407G-DISC1 wired in at the front of the bench.*
+
+![Mission Planner telemetry view](Docs/Images/Mission%20Planner%20Integrated%20with%20STM32.png)
+
+*Mission Planner receiving heartbeat and position messages from the STM32 sketch in `firmware/stmsketch/`.*
+
+### Swarm mesh radio
+
+![ESP32 nodes running the ESP-NOW mesh protocol](Docs/Images/ESP32%20Communication%20Protocol.jpeg)
+
+*Three ESP32 nodes exchanging ESP-NOW packets peer-to-peer, with an I²C display reporting node state. Each node carries a survivor-trigger input and a defined message contract (`MSG_SURVIVOR`, `MSG_EVENT_ACK`). Firmware in `firmware/`.*
+
+### Verified
 
 - Raspberry Pi 4 hosts the full digital twin and runs missions independently of any laptop, accessed over Wi-Fi hotspot and SSH.
 - STM32F407G-DISC1 enumerates over USB as an ST-LINK device and is detected on the hardware bus.
-- MAVLink heartbeat and position packets stream from the STM32 into a `pymavlink` receiver on the Pi.
-- A terminal mission dashboard displays live fleet state, localization error and hardware bus status directly on the Pi.
-- Three ESP32 nodes exchange ESP-NOW packets peer-to-peer with a defined message contract (`MSG_SURVIVOR`, `MSG_EVENT_ACK`), survivor-trigger input and I²C LCD status output. Firmware in `firmware/`.
+- MAVLink heartbeat and position packets stream from the STM32 into a `pymavlink` receiver on the Pi, with message counts confirmed on the console.
+- A terminal mission dashboard displays live fleet state, navigation, attitude, power and link health directly on the Pi.
+- Three ESP32 nodes exchange ESP-NOW packets peer-to-peer with a defined message contract, survivor-trigger input and I²C status output.
 
 The STM32 represents the flight controller interface. It does not implement stabilization, motor mixing or sensor fusion — those are assumed to exist in a production flight controller such as a Pixhawk running ArduPilot or PX4. Telemetry in the current setup originates from Mission Planner, not from a flying airframe. This is hardware-in-the-loop validation of the interface, not a flight test.
 
