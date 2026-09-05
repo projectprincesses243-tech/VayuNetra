@@ -16,6 +16,8 @@ VayuNetra is the software layer that solves that second problem. We do not build
 
 The system is developed as a **digital twin** — a complete software replica of the swarm, in which the coordination logic is written exactly as it would be for real flight hardware, and the communication layer is swappable. This allows the decision-making to be tested, broken deliberately, and measured before any hardware is risked.
 
+The twin is not confined to a laptop. It runs on a Raspberry Pi 4 acting as the edge gateway, receiving MAVLink telemetry from an STM32F407G-DISC1 over USB-TTL, and ingesting live government disaster alerts from the NDMA SACHET feed. Real data enters from both ends.
+
 ---
 
 ## The three problems we address
@@ -31,6 +33,16 @@ The system is developed as a **digital twin** — a complete software replica of
 ## System architecture
 
 ```
+   PRE-DISASTER INTELLIGENCE          HARDWARE TELEMETRY
+   NDMA SACHET / IMD alerts           Mission Planner + ArduPilot
+            |                                  |
+   normalize, dedupe, store           STM32F407G-DISC1 (MAVLink)
+            |                                  |
+   disaster scenario                   USB-TTL serial
+            \                                  /
+             \                                /
+              RASPBERRY PI 4 — EDGE GATEWAY
+                          |
    MISSION INTERFACE      observer only; issues no commands
           ^
    COORDINATION LAYER     auction, task lifecycle, sector claiming
@@ -58,6 +70,8 @@ Every module publishes events to a shared bus rather than calling other modules 
 
 **Detection requires corroboration.** A single camera mistakes rubble and debris for people. An alert is raised only when at least two of three independent signals agree, and the trained model must be one of them. A false positive is not a wasted trip — it sends a rescue team into an unstable structure for nothing.
 
+**Pre-disaster intelligence runs isolated.** The alert service is a separate process on its own port. If the government feed is slow, unreachable, or malformed, the twin continues to run. External dependencies are never allowed to sit in the mission loop.
+
 ---
 
 ## Repository structure
@@ -71,10 +85,10 @@ localize/            dead reckoning, ranging, trilateration, filtering
 perception/          YOLOv8 detection and multi-signal fusion
 mission/             state machine and Contract Net auction
 integration/         adapters connecting independently written modules
+pre_disaster/        NDMA SACHET alert service (standalone, port 8001)
 server/              FastAPI live-state server with WebSocket
+firmware/            ESP32 ESP-NOW mesh nodes and STM32 MAVLink sketch
 Frontend/            React mission dashboard
-Frontend/src/Backend/disaster_alerts/
-                     pre-disaster alert ingestion (IMD, SACHET)
 tools/               frame mapping, detector tests, demo scripts
 console.html         standalone mission console, no build step
 sim.py               integrated mission loop
@@ -94,6 +108,7 @@ source .venv/bin/activate         # Linux / Raspberry Pi
 
 pip install numpy scipy fastapi "uvicorn[standard]" pygame
 pip install opencv-python ultralytics    # perception (optional)
+pip install feedparser requests          # pre-disaster alerts (optional)
 ```
 
 **Run a mission:**
@@ -116,6 +131,15 @@ npm install
 npm run dev
 ```
 
+**Run the pre-disaster alert service** (separate terminal, separate port):
+
+```bash
+cd pre_disaster
+python -m uvicorn app:app --port 8001
+```
+
+Trigger a fetch with `POST /api/alerts/check`, then read `GET /api/alerts`.
+
 **Command-line options:**
 
 ```bash
@@ -128,17 +152,53 @@ python sim.py --drones 3        # change fleet size
 
 ## Measured results
 
-Reproduce with `python experiments.py`. Results are averaged across 8 random seeds.
+Reproduce with `python experiments.py`. All figures are means over 8 random seeds (1, 7, 13, 21, 42, 99, 123, 256), reported with standard deviation.
 
-Detection uses a small image set, so absolute rescue counts are limited by how many survivor frames the detector confirms rather than by swarm performance. The comparative results — with versus without ranging, and one drone versus several — are the meaningful measurements.
+### GPS-denied localization
 
-| Measurement | Result |
+| Condition | Mean position error |
 |---|---|
-| Localization error, ranging active | ~8.8 m |
-| Localization error, ranging denied | ~84.6 m |
-| Improvement factor | **~9.6x** |
-| Coverage, six drones | 100% |
-| Coverage, single drone | ~43% |
+| Ranging active | 2.61 m ± 0.67 |
+| Ranging denied | 23.74 m ± 5.62 |
+| **Improvement factor** | **9.1x** |
+
+### Swarm size versus single drone
+
+| Drones | Survivors rescued (of 5) | Coverage |
+|---|---|---|
+| 1 | 0.88 ± 0.83 | 16.25% ± 14.08 |
+| 3 | 2.00 ± 1.20 | 30.75% ± 11.42 |
+| 6 | 2.62 ± 1.69 | 49.00% ± 10.54 |
+
+### Failure recovery
+
+| Condition | Rescued | Auctions run |
+|---|---|---|
+| No failure | 2.62 | 2.88 |
+| One drone lost mid-task | 2.12 | 3.38 |
+
+The kill is timed to catch a drone actively carrying a task. The extra auctions are re-auctions of the released task. Recovery requires no central coordinator and no recovery procedure — the ordinary rules absorb the loss.
+
+### Graceful degradation
+
+| Fleet size | Rescued (of 5) | Coverage |
+|---|---|---|
+| 6 | 2.62 ± 1.69 | 49.00% |
+| 5 | 3.12 ± 1.36 | 46.12% |
+| 4 | 2.88 ± 1.36 | 39.12% |
+| 3 | 2.00 ± 1.20 | 30.75% |
+| 2 | 1.25 ± 1.04 | 23.25% |
+
+### Perception fusion
+
+Evaluated across 1,417 real disaster-scene images spanning six categories (collapsed building, fire, flood, landslide, traffic incident, normal). In 646 cases, partial single-sensor agreement was correctly suppressed because the trained model did not corroborate it. This is a false-alert suppression rate, not a precision/recall figure — the image set has no survivor ground truth.
+
+### What these numbers are, and are not
+
+- Range measurements use Gaussian noise calibrated to published UWB accuracy (~10 cm). They are modelled, not measured from hardware.
+- Dead-reckoning drift is modelled as fixed per-drone bias plus a random walk. Magnitudes are tuned, not taken from a specific IMU.
+- Perception in the swarm experiment runs a proximity model, not YOLO inference. Detector accuracy is measured separately, above.
+- All drones run in one process, so bids do not yet cross a physical radio.
 
 ---
 
@@ -147,18 +207,28 @@ Detection uses a small image set, so absolute rescue counts are limited by how m
 The same coordination code runs unmodified on a Raspberry Pi 4, which is the class of companion computer a real drone would carry.
 
 ```
-  RASPBERRY PI 4          mission intelligence, perception, dashboard
+  MISSION PLANNER + ARDUPILOT     simulated flight telemetry source
         |
-        | USB / UART
+        | MAVLink
         |
-  STM32F407G-DISC1        flight controller interface
+  STM32F407G-DISC1                flight controller interface
         |
-  ESP32                   swarm mesh radio (ESP-NOW)
+        | USB-TTL serial
+        |
+  RASPBERRY PI 4                  digital twin host, perception, dashboard
+        |
+  ESP32 x3                        swarm mesh radio (ESP-NOW)
 ```
 
-**Verified:** Raspberry Pi hosts the full digital twin and runs missions independently of any laptop. STM32F407G-DISC1 detected over USB on `/dev/ttyACM0`. A terminal mission dashboard (`pi_dashboard.py`) displays live state directly on the Pi.
+**Verified:**
 
-The STM32 represents the flight controller interface. It does not implement stabilization, motor mixing or sensor fusion — those are assumed to exist in a production flight controller such as a Pixhawk running ArduPilot or PX4.
+- Raspberry Pi 4 hosts the full digital twin and runs missions independently of any laptop, accessed over Wi-Fi hotspot and SSH.
+- STM32F407G-DISC1 enumerates over USB as an ST-LINK device and is detected on the hardware bus.
+- MAVLink heartbeat and position packets stream from the STM32 into a `pymavlink` receiver on the Pi.
+- A terminal mission dashboard displays live fleet state, localization error and hardware bus status directly on the Pi.
+- Three ESP32 nodes exchange ESP-NOW packets peer-to-peer with a defined message contract (`MSG_SURVIVOR`, `MSG_EVENT_ACK`), survivor-trigger input and I²C LCD status output. Firmware in `firmware/`.
+
+The STM32 represents the flight controller interface. It does not implement stabilization, motor mixing or sensor fusion — those are assumed to exist in a production flight controller such as a Pixhawk running ArduPilot or PX4. Telemetry in the current setup originates from Mission Planner, not from a flying airframe. This is hardware-in-the-loop validation of the interface, not a flight test.
 
 ---
 
@@ -169,7 +239,8 @@ We would rather state these than have them discovered.
 - **Terrain mapping.** We record which cells have been searched. We do not build a map of the environment. That is SLAM, and it solves a different problem.
 - **Real thermal imaging.** The thermal channel is derived from visible-light imagery. We do not have a thermal camera.
 - **Physical flight.** Nothing has flown. The flight controller interface is demonstrated, not the aircraft.
-- **Distributed execution.** All drones currently run in one process, so bids do not yet cross a physical radio. The decision logic is decentralized; the deployment is not yet.
+- **Distributed execution.** All drones in the twin currently run in one process, so bids do not yet cross a physical radio. The ESP-NOW mesh is proven separately; the two are not yet joined.
+- **Severity-driven task priority.** Live disaster alerts reach the mission and appear in mission state, but `hazard`, `severity` and `priority` are not yet read by the auction cost function. The intelligence is displayed, not yet acted upon.
 - **Secure communication.** No message authentication or encryption is implemented.
 - **3D navigation.** The simulation operates on a 2D plane. Altitude, wind and aerodynamics are not modelled.
 
@@ -181,7 +252,7 @@ We would rather state these than have them discovered.
 |---|---|
 | Mantripragada Ramaa Gayatri | Integration, hardware architecture, Raspberry Pi deployment |
 | Allu Uma Eashanvi | Environment, swarm behaviour, path planning, ESP32 |
-| Vaishnavi H B | GPS-denied localization: dead reckoning, ranging, trilateration |
+| Vaishnavi H B | GPS-denied localization: dead reckoning, ranging, trilateration; pre-disaster alert service |
 | Vandana H S | Mission dashboard, pre-disaster alert integration |
 | Tejaswini Badami | Perception: YOLOv8 detection, multi-signal fusion |
 
@@ -189,4 +260,4 @@ We would rather state these than have them discovered.
 
 ## Acknowledgements
 
-Reviewed against: Reynolds (1987) on flocking behaviour, Smith (1980) on the Contract Net Protocol, Ultralytics YOLOv8 documentation, Espressif ESP-NOW documentation, and published reviews of UAV deployment in disaster response including Nepal 2015, Hurricane Harvey 2017, and the Noto Peninsula earthquake 2024.
+Reviewed against: Reynolds (1987) on flocking behaviour, Smith (1980) on the Contract Net Protocol, Grieves (2014) on digital twin architecture, Ultralytics YOLOv8 documentation, Espressif ESP-NOW documentation, the MAVLink and ArduPilot reference documentation, the NDMA SACHET Common Alerting Protocol schema, and published reviews of UAV deployment in disaster response including Nepal 2015, Hurricane Harvey 2017, and the Noto Peninsula earthquake 2024.
