@@ -91,6 +91,13 @@ class Mission:
 
         BUS.subscribe("SURVIVOR_DETECTED", self.on_detection)
 
+    def update_scenario(self, scenario):
+        """
+        Update active disaster intelligence
+        without restarting the digital twin.
+        """
+        self.scenario = scenario
+
     # ------------------------------------------------------------------
     def on_detection(self, p):
         tid = f"T{p['survivor_id']:03d}"
