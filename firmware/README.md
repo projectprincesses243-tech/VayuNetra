@@ -1,47 +1,39 @@
 # VayuNetra Firmware
 
-This folder contains embedded firmware used in the VayuNetra autonomous disaster response system.
+Embedded firmware used in the VayuNetra disaster response system.
 
 ## ESP32 Firmware
 
-### Node1
-ESP32 communication node responsible for wireless mesh communication.
+### ESP32_Node1
+Wireless ESP-NOW communication node.
 
-### Node2
-ESP32 relay/gateway node used for forwarding communication.
+### ESP32_Node2
+ESP-NOW relay/gateway node.
 
-### Node3
-ESP32 receiver node for telemetry exchange.
-
-Communication:
-- ESP-NOW protocol
-- Wireless node-to-node communication
+### ESP32_Node3
+ESP-NOW receiver node.
 
 
 ## STM32 Firmware
 
-### stmsketch
+### STM32_MAVLink
 
-STM32F407G-DISC1 firmware used for MAVLink telemetry generation.
+STM32F407G-DISC1 firmware.
 
-Hardware:
-- STM32F407G DISC1
-- USB-TTL serial communication
+Used for:
+- MAVLink telemetry generation
+- Mission Planner communication
+- ArduPilot integration
 
-Software:
-- Arduino IDE
-- MAVLink protocol
-- ArduPilot Mission Planner integration
+Communication:
 
-
-## Hardware Flow
-
-STM32
-↓
+STM32F407G-DISC1
+        |
+        |
 USB-TTL
-↓
+        |
+        |
 Raspberry Pi
-↓
-MAVLink Telemetry Processing
-↓
-VayuNetra Dashboard
+        |
+        |
+Telemetry Dashboard
