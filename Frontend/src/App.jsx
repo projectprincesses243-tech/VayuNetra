@@ -6,6 +6,7 @@ import Drones from "./pages/Drones";
 import LiveMap from "./pages/LiveMap";
 import Perception from "./pages/Perception";
 import History from "./pages/History";
+import PreDisaster from "./PreDisaster";
 
 import "./App.css";
 
@@ -82,6 +83,12 @@ function App() {
             >
               History
             </NavLink>
+            <NavLink
+  to="/predisaster"
+  className="nav-item"
+>
+  Pre Disaster
+</NavLink>
 
           </nav>
 
@@ -136,7 +143,10 @@ function App() {
             path="/history"
             element={<History />}
           />
-
+<Route
+ path="/predisaster"
+ element={<PreDisaster/>}
+/>
         </Routes>
 
       </div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
-const API_URL = "http://localhost:8001/api/alerts";
+//const API_URL = "http://localhost:8001/api/alerts";
+const API_URL = "http://localhost:8000/api/state";
 
 function PreDisaster() {
   const [alerts, setAlerts] = useState([]);
@@ -70,13 +71,38 @@ function PreDisaster() {
         );
       }
 
-      const data = await response.json();
+    /*  const data = await response.json();
 
       const incomingAlerts =
         data.alerts || [];
 
       setAlerts(incomingAlerts);
+*/
+const data = await response.json();
 
+let incomingAlerts = [];
+
+if (data.scenario) {
+    incomingAlerts = [
+        {
+            id: "scenario-1",
+            alert_type: data.scenario.hazard,
+            severity: data.scenario.severity,
+            priority: data.scenario.priority,
+            affected_area: data.scenario.affected_area,
+            source: "VayuNetra Disaster Intelligence",
+            authority: "IMD / ADRF",
+            state: "",
+            district: "",
+            issued_at: new Date().toISOString(),
+            description:
+              "Pre-disaster scenario detected from government alert monitoring system.",
+            status: "ACTIVE"
+        }
+    ];
+}
+
+setAlerts(incomingAlerts);
       setBackendStatus("Connected");
 
       setLoading(false);

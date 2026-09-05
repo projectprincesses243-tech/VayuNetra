@@ -52,7 +52,11 @@ class ReconCompleteRequest(BaseModel):
 
 class StopMissionRequest(BaseModel):
     reason: str = "operator_stop"
-
+class DisasterScenarioRequest(BaseModel):
+    hazard: str
+    severity: str
+    priority: str
+    affected_area: str
 
 class SimRunner:
     def __init__(self):
@@ -140,6 +144,15 @@ class SimRunner:
             self.tick = 0
 
         self.start()
+    def update_scenario(self, scenario):
+
+         with self.lock:
+            self.mission.update_scenario(scenario)
+
+            return {
+                "updated": True,
+                "scenario": scenario.to_dict()
+            }
 
     def set_ranging(self, on):
         with self.lock:
@@ -352,7 +365,19 @@ def stop_mission(request: StopMissionRequest | None = None):
     reason = request.reason if request else "operator_stop"
     return RUNNER.stop_mission(reason)
 
+@app.post("/api/disaster/update")
+def update_disaster(request: DisasterScenarioRequest):
 
+    from integration.pre_disaster_adapter import DisasterScenario
+
+    scenario = DisasterScenario(
+        hazard=request.hazard,
+        severity=request.severity,
+        priority=request.priority,
+        affected_area=request.affected_area
+    )
+
+    return RUNNER.update_scenario(scenario)
 @app.post("/api/ranging/{on}")
 def ranging(on: bool):
     RUNNER.set_ranging(on)

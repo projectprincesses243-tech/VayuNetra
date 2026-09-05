@@ -2072,7 +2072,14 @@ class Mission:
                 "DRONE_DIED"
             ),
         }
+    def update_scenario(self, scenario):
+        """
+        Update active disaster scenario from pre-disaster intelligence.
+        """
 
+        self.scenario = scenario.to_dict()
+
+        return self.scenario
     # ========================================================
     # SNAPSHOT FOR DASHBOARD + LIVE MAP
     # ========================================================
@@ -2305,6 +2312,7 @@ class Mission:
             "metrics": self.results(),
 
             "events": BUS.recent(25),
+            "scenario": getattr(self, "scenario", None),
 
             # ------------------------------------------------
             # NEW MISSION STATE
